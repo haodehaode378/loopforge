@@ -100,6 +100,9 @@ def render_report(result: LoopResult) -> str:
     steps = "\n".join(
         f"- {step.name}: {step.detail}" for step in result.steps
     )
+    critique = "\n".join(
+        f"- {step.detail}" for step in result.steps if step.name == "critique"
+    )
 
     return (
         f"# Agent Run {result.run_id}\n\n"
@@ -108,6 +111,7 @@ def render_report(result: LoopResult) -> str:
         f"## Goal\n\n{result.goal.description}\n\n"
         f"## Assumptions\n\n{assumptions}\n\n"
         f"## Success Criteria\n\n{criteria}\n\n"
+        f"## Sharp Review\n\n{critique}\n\n"
         f"## Loop Trace\n\n{steps}\n"
     )
 

@@ -22,6 +22,7 @@ class RunLoopTests(unittest.TestCase):
             "observe",
             "adjust",
             "verify",
+            "critique",
             "report",
         ])
 
@@ -64,6 +65,7 @@ class RunLoopTests(unittest.TestCase):
 
             self.assertIn("# Agent Run", report)
             self.assertIn("Project:", report)
+            self.assertIn("## Sharp Review", report)
             self.assertIn("Render report", report)
 
 

@@ -22,6 +22,7 @@ Every completed loop must end with a Git checkpoint.
 Required close-out:
 
 - Run the verification commands defined by that loop.
+- Add a sharp review before the final report. The review must judge scope control, product alignment, verification quality, and remaining risk.
 - Confirm private files remain ignored, especially `AGENTS.md`, `docs/loop-spec.md`, `.agent/`, and generated caches.
 - Commit only the intended public source, tests, and documentation.
 - Push the commit to GitHub.

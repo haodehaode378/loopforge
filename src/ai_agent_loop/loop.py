@@ -53,6 +53,11 @@ def run_loop(goal: str) -> LoopResult:
         AgentStep("observe", "Loop trace was produced and can be persisted."),
         AgentStep("adjust", "No adjustment needed for the deterministic MVP path."),
         AgentStep("verify", "Goal is non-empty and result is structured."),
+        AgentStep(
+            "critique",
+            "Sharp review: the change is acceptable only if it stays scoped, "
+            "verified, and aligned with the current loop goal.",
+        ),
         AgentStep("report", "Return the loop result and write inspectable artifacts."),
     ]
 
