@@ -22,6 +22,12 @@ class CliArgTests(unittest.TestCase):
             ["--store", "tmp-runs", "inspect"],
         )
 
+    def test_normalize_argv_skips_project_value(self) -> None:
+        self.assertEqual(
+            normalize_argv(["--project", "sample-project", "inspect"]),
+            ["--project", "sample-project", "inspect"],
+        )
+
     def test_normalize_argv_converts_legacy_goal_after_store(self) -> None:
         self.assertEqual(
             normalize_argv(["--store", "tmp-runs", "Ship the MVP"]),

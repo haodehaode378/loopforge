@@ -3,6 +3,7 @@
 from ai_agent_loop.agent import Agent
 from ai_agent_loop.goal import Goal
 from ai_agent_loop.loop import AgentStep, LoopResult, run_loop
+from ai_agent_loop.project import Project, ProjectRegistry
 from ai_agent_loop.store import RunStore, render_report
 
 __all__ = [
@@ -10,6 +11,8 @@ __all__ = [
     "AgentStep",
     "Goal",
     "LoopResult",
+    "Project",
+    "ProjectRegistry",
     "RunStore",
     "render_report",
     "run_loop",

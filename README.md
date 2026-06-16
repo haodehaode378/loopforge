@@ -6,7 +6,7 @@ LoopForge is a local-first developer tool for turning agent work into inspectabl
 Goal -> Context -> Plan -> Act -> Observe -> Adjust -> Verify -> Report
 ```
 
-The current implementation is dependency-free and intentionally small. Each run persists its goal, event trace, and report under `.agent/runs/`.
+The current implementation is dependency-free and intentionally small. Each project gets isolated metadata, memory, and run history under `.agent/projects/<project_id>/`.
 
 ## Product Direction
 
@@ -35,8 +35,10 @@ It will focus on:
 |       +-- cli.py
 |       +-- goal.py
 |       +-- loop.py
+|       +-- project.py
 |       +-- store.py
 +-- tests/
+    +-- test_cli.py
     +-- test_loop.py
 ```
 
@@ -61,9 +63,12 @@ loopforge run "Build a tiny todo app"
 This creates:
 
 ```text
-.agent/runs/<run_id>/goal.json
-.agent/runs/<run_id>/events.jsonl
-.agent/runs/<run_id>/report.md
+.agent/projects.json
+.agent/projects/<project_id>/project.json
+.agent/projects/<project_id>/memory.json
+.agent/projects/<project_id>/runs/<run_id>/goal.json
+.agent/projects/<project_id>/runs/<run_id>/events.jsonl
+.agent/projects/<project_id>/runs/<run_id>/report.md
 ```
 
 Inspect run history:
@@ -72,6 +77,13 @@ Inspect run history:
 loopforge inspect
 loopforge inspect <run_id>
 loopforge report <run_id>
+```
+
+Use a specific project:
+
+```powershell
+loopforge --project E:\path\to\project run "Continue development"
+loopforge --project E:\path\to\project inspect
 ```
 
 Run tests:

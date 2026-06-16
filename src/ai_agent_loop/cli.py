@@ -16,6 +16,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=".agent",
         help="Directory used to save run artifacts.",
     )
+    parser.add_argument(
+        "--project",
+        default=".",
+        help="Project directory used to isolate run history.",
+    )
     subparsers = parser.add_subparsers(dest="command")
 
     run_parser = subparsers.add_parser("run", help="Create a new run.")
@@ -38,15 +43,15 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> None:
     args = build_parser().parse_args(normalize_argv(argv))
     if args.command == "run":
-        run_goal(args.goal, args.store, persist=not args.no_persist)
+        run_goal(args.goal, args.store, args.project, persist=not args.no_persist)
         return
 
     if args.command == "inspect":
-        inspect_runs(args.store, args.run_id)
+        inspect_runs(args.store, args.project, args.run_id)
         return
 
     if args.command == "report":
-        show_report(args.store, args.run_id)
+        show_report(args.store, args.project, args.run_id)
         return
 
     build_parser().error("command or goal is required")
@@ -55,7 +60,7 @@ def main(argv: list[str] | None = None) -> None:
 def normalize_argv(argv: list[str] | None) -> list[str]:
     raw_args = list(sys.argv[1:] if argv is None else argv)
     commands = {"run", "inspect", "report"}
-    options_with_values = {"--store"}
+    options_with_values = {"--store", "--project"}
     skip_next = False
     for index, value in enumerate(raw_args):
         if skip_next:
@@ -72,8 +77,8 @@ def normalize_argv(argv: list[str] | None) -> list[str]:
     return raw_args
 
 
-def run_goal(goal: str, store: str, persist: bool) -> None:
-    agent = Agent(store_root=store)
+def run_goal(goal: str, store: str, project: str, persist: bool) -> None:
+    agent = Agent(store_root=store, project_path=project)
     result = agent.run(goal, persist=persist)
     for step in result.steps:
         print(f"{step.name} [{step.status}]: {step.detail}")
@@ -82,11 +87,11 @@ def run_goal(goal: str, store: str, persist: bool) -> None:
     print(f"project: {result.project}")
     print(f"status: {result.status}")
     if persist:
-        print(f"artifacts: {store}/runs/{result.run_id}")
+        print(f"artifacts: {store}/projects/{result.project_id}/runs/{result.run_id}")
 
 
-def inspect_runs(store: str, run_id: str | None) -> None:
-    run_store = RunStore(store)
+def inspect_runs(store: str, project: str, run_id: str | None) -> None:
+    run_store = RunStore(store, project_path=project)
     if run_id:
         summary = run_store.read_summary(run_id)
         events = run_store.read_events(run_id)
@@ -111,13 +116,15 @@ def inspect_runs(store: str, run_id: str | None) -> None:
         )
 
 
-def show_report(store: str, run_id: str) -> None:
-    sys.stdout.write(RunStore(store).read_report(run_id))
+def show_report(store: str, project: str, run_id: str) -> None:
+    sys.stdout.write(RunStore(store, project_path=project).read_report(run_id))
 
 
 def print_summary(summary: dict[str, object]) -> None:
     print(f"run_id: {summary['run_id']}")
     print(f"project: {summary['project']}")
+    print(f"project_id: {summary['project_id']}")
+    print(f"project_path: {summary['project_path']}")
     print(f"status: {summary['status']}")
     print(f"goal: {summary['goal']}")
     print(f"event_count: {summary['event_count']}")

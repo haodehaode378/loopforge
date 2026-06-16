@@ -24,6 +24,7 @@ src/ai_agent_loop/
 +-- cli.py      CLI entry point
 +-- goal.py     Goal model
 +-- loop.py     Loop primitives
++-- project.py  Project registry and metadata
 +-- store.py    Local run persistence
 ```
 
@@ -73,32 +74,26 @@ The app should support multiple local projects. Each project has isolated runs, 
 Each run should be durable and easy to inspect:
 
 ```text
-.loopforge/
-+-- project.json
-+-- memory.json
-+-- policy.json
-+-- runs/
-|   +-- <run_id>/
-|       +-- goal.json
-|       +-- events.jsonl
-|       +-- report.md
-|       +-- diff.patch
-|       +-- commands/
-|       |   +-- <step_id>.stdout.txt
-|       |   +-- <step_id>.stderr.txt
-|       +-- artifacts/
+.agent/
++-- projects.json
++-- projects/
+|   +-- <project_id>/
+|       +-- project.json
+|       +-- memory.json
+|       +-- policy.json
+|       +-- runs/
+|           +-- <run_id>/
+|               +-- goal.json
+|               +-- events.jsonl
+|               +-- report.md
+|               +-- diff.patch
+|               +-- commands/
+|               |   +-- <step_id>.stdout.txt
+|               |   +-- <step_id>.stderr.txt
+|               +-- artifacts/
 ```
 
-The current prototype still uses:
-
-```text
-.agent/runs/<run_id>/
-+-- goal.json
-+-- events.jsonl
-+-- report.md
-```
-
-Only `goal.json`, `events.jsonl`, and `report.md` exist today.
+Only `projects.json`, `project.json`, `memory.json`, `goal.json`, `events.jsonl`, and `report.md` exist today.
 
 ## Project Memory
 

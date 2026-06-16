@@ -30,18 +30,28 @@ class LoopResult:
     steps: list[AgentStep]
     status: str
     project: str
+    project_id: str
+    project_path: str
 
     @property
     def done(self) -> bool:
         return self.status == "done"
 
 
-def run_loop(goal: str) -> LoopResult:
+def run_loop(
+    goal: str,
+    project: str | None = None,
+    project_id: str | None = None,
+    project_path: str | None = None,
+) -> LoopResult:
     """Run the minimal deterministic loop for a user goal."""
 
     parsed_goal = Goal.from_text(goal)
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
-    project = Path.cwd().name or str(Path.cwd())
+    cwd = Path.cwd()
+    resolved_project = project or cwd.name or str(cwd)
+    resolved_project_path = project_path or str(cwd)
+    resolved_project_id = project_id or resolved_project
 
     steps = [
         AgentStep("goal", parsed_goal.description),
@@ -66,5 +76,7 @@ def run_loop(goal: str) -> LoopResult:
         goal=parsed_goal,
         steps=steps,
         status="done",
-        project=project,
+        project=resolved_project,
+        project_id=resolved_project_id,
+        project_path=resolved_project_path,
     )

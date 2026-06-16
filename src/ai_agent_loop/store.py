@@ -7,14 +7,23 @@ from pathlib import Path
 
 from ai_agent_loop.goal import Goal
 from ai_agent_loop.loop import AgentStep, LoopResult
+from ai_agent_loop.project import Project, ProjectRegistry
 
 
 class RunStore:
-    def __init__(self, root: Path | str = ".agent") -> None:
+    def __init__(
+        self,
+        root: Path | str = ".agent",
+        project: Project | None = None,
+        project_path: Path | str | None = None,
+    ) -> None:
         self.root = Path(root)
+        self.registry = ProjectRegistry(self.root)
+        self.project = project or self.registry.ensure_project(project_path)
+        self.registry.ensure_project_files(self.project)
 
     def save(self, result: LoopResult) -> Path:
-        run_dir = self.root / "runs" / result.run_id
+        run_dir = self.run_dir(result.run_id)
         run_dir.mkdir(parents=True, exist_ok=True)
 
         self._write_json(run_dir / "goal.json", goal_to_record(result))
@@ -24,7 +33,7 @@ class RunStore:
         return run_dir
 
     def list_runs(self) -> list[dict[str, object]]:
-        runs_dir = self.root / "runs"
+        runs_dir = self.runs_dir()
         if not runs_dir.exists():
             return []
 
@@ -49,6 +58,8 @@ class RunStore:
         return {
             "run_id": run_id,
             "project": goal_record.get("project", "unknown"),
+            "project_id": goal_record.get("project_id", self.project.id),
+            "project_path": goal_record.get("project_path", self.project.path),
             "status": goal_record.get("status", infer_status(events)),
             "goal": goal_record.get("description", ""),
             "event_count": len(events),
@@ -72,7 +83,10 @@ class RunStore:
         return report_path.read_text(encoding="utf-8")
 
     def run_dir(self, run_id: str) -> Path:
-        return self.root / "runs" / run_id
+        return self.runs_dir() / run_id
+
+    def runs_dir(self) -> Path:
+        return self.registry.project_dir(self.project) / "runs"
 
     @staticmethod
     def _write_json(path: Path, data: dict[str, object]) -> None:
@@ -108,6 +122,8 @@ def render_report(result: LoopResult) -> str:
         f"# Agent Run {result.run_id}\n\n"
         f"Status: {result.status}\n\n"
         f"Project: {result.project}\n\n"
+        f"Project ID: {result.project_id}\n\n"
+        f"Project Path: {result.project_path}\n\n"
         f"## Goal\n\n{result.goal.description}\n\n"
         f"## Assumptions\n\n{assumptions}\n\n"
         f"## Success Criteria\n\n{criteria}\n\n"
@@ -120,6 +136,8 @@ def goal_to_record(result: LoopResult) -> dict[str, object]:
     record = result.goal.to_dict()
     record["run_id"] = result.run_id
     record["project"] = result.project
+    record["project_id"] = result.project_id
+    record["project_path"] = result.project_path
     record["status"] = result.status
     return record
 

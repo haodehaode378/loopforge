@@ -8,6 +8,6 @@ __pycache__/
 .env
 .env.*
 !.env.example
-.agent/runs/
+.agent/
 AGENTS.md
 docs/loop-spec.md
