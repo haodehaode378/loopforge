@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from pathlib import Path
 
 from ai_agent_loop.goal import Goal
 
@@ -28,6 +29,7 @@ class LoopResult:
     goal: Goal
     steps: list[AgentStep]
     status: str
+    project: str
 
     @property
     def done(self) -> bool:
@@ -38,7 +40,8 @@ def run_loop(goal: str) -> LoopResult:
     """Run the minimal deterministic loop for a user goal."""
 
     parsed_goal = Goal.from_text(goal)
-    run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    project = Path.cwd().name or str(Path.cwd())
 
     steps = [
         AgentStep("goal", parsed_goal.description),
@@ -53,4 +56,10 @@ def run_loop(goal: str) -> LoopResult:
         AgentStep("report", "Return the loop result and write inspectable artifacts."),
     ]
 
-    return LoopResult(run_id=run_id, goal=parsed_goal, steps=steps, status="done")
+    return LoopResult(
+        run_id=run_id,
+        goal=parsed_goal,
+        steps=steps,
+        status="done",
+        project=project,
+    )

@@ -46,6 +46,8 @@ See also:
 - [ROADMAP.md](ROADMAP.md)
 - [docs/product.md](docs/product.md)
 - [docs/architecture.md](docs/architecture.md)
+- [docs/design-system.md](docs/design-system.md)
+- [docs/mvp-loops.md](docs/mvp-loops.md)
 
 ## Quick Start
 
@@ -53,7 +55,7 @@ See also:
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -e .
-agent-loop "Build a tiny todo app"
+loopforge run "Build a tiny todo app"
 ```
 
 This creates:
@@ -64,6 +66,14 @@ This creates:
 .agent/runs/<run_id>/report.md
 ```
 
+Inspect run history:
+
+```powershell
+loopforge inspect
+loopforge inspect <run_id>
+loopforge report <run_id>
+```
+
 Run tests:
 
 ```powershell
@@ -72,7 +82,6 @@ python -m unittest discover -s tests
 
 ## Next Steps
 
-- Add `loopforge inspect` for browsing run history.
 - Add tool adapters for files, shell, Git, and tests.
 - Add model/provider code behind a small interface.
 - Add a desktop/web UI for run timelines, approvals, diffs, and verification output.
