@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ai-agent-loop"
+version = "0.1.0"
+description = "LoopForge: a local-first agent workbench for inspectable developer runs."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+agent-loop = "ai_agent_loop.cli:main"
+loopforge = "ai_agent_loop.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
