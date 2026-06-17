@@ -291,13 +291,15 @@ Must complete:
 - Failed run review.
 - Blocked decision panel.
 - Multi-agent coordination view.
-- Settings for provider, privacy, local-only mode, optional sync, and risk policy.
+- Git Summary, Automation Summary, and Critique sections.
+- No approve, resume, write, model call, login, or sync actions.
 
 Verification:
 
 - UI can read real run store data.
 - Desktop smoke test opens a project and views a run.
 - Language switch changes UI text.
+- Browser screenshot verifies the workbench renders.
 - Text does not overflow at common desktop sizes.
 
 If incomplete:

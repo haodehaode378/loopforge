@@ -100,6 +100,7 @@ class RunStore:
         report = report_path.read_text(encoding="utf-8")
         events = self.read_events(run_id)
         effective_status = infer_status(events)
+        report = ensure_summary_headings(report)
         report = replace_status_line(report, effective_status)
         report = replace_automation_summary(report, render_automation_summary(events))
         report = replace_git_summary(report, render_git_summary(events))
@@ -415,6 +416,23 @@ def replace_status_line(report: str, status: str) -> str:
             lines[index] = f"Status: {status}"
             return "\n".join(lines) + ("\n" if report.endswith("\n") else "")
     return report
+
+
+def ensure_summary_headings(report: str) -> str:
+    if "## Sharp Review" not in report:
+        return report
+    additions = []
+    if "## Automation Summary" not in report:
+        additions.append("## Automation Summary\n\nNo autonomous actions recorded.\n")
+    if "## Git Summary" not in report:
+        additions.append("## Git Summary\n\nNo git actions recorded.\n")
+    if "## Multi-Agent Summary" not in report:
+        additions.append("## Multi-Agent Summary\n\nNo multi-agent coordination recorded.\n")
+    if not additions:
+        return report
+    before, after = report.split("## Sharp Review", 1)
+    inserted = "\n".join(additions)
+    return f"{before}{inserted}\n## Sharp Review{after}"
 
 
 def replace_sharp_review(report: str, critique: str) -> str:

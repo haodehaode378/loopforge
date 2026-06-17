@@ -31,6 +31,7 @@ src/ai_agent_loop/
 +-- project.py  Project registry and metadata
 +-- settings.py Project settings models without secret persistence
 +-- store.py    Local run persistence
++-- workbench.py Read-only local web workbench
 +-- events.py   Structured event records
 +-- policy.py   Policy decisions and blocked-state rules
 +-- risk.py     Risk metadata
@@ -64,7 +65,7 @@ src/ai_agent_loop/
 
 ## Desktop App Shape
 
-The desktop app should be the primary product surface. It reads and writes the same local store as the CLI.
+The desktop app should be the primary product surface. The current implementation ships a read-only local web workbench that reads the same local store as the CLI.
 
 Core screens:
 
@@ -77,6 +78,13 @@ Core screens:
 - Settings.
 
 The app should support multiple local projects. Each project has isolated runs, memory, provider settings, privacy rules, and automation policy.
+
+Current workbench behavior:
+
+- `loopforge workbench` starts a local HTTP UI.
+- `loopforge workbench --snapshot` prints the read-only JSON snapshot.
+- The UI shows project list, run history, event timeline, report sections, Git Summary, Automation Summary, Sharp Review, and Multi-Agent Summary.
+- The UI does not approve, resume, write, call models, log in, or sync.
 
 ## Run Store
 

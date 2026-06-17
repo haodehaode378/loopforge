@@ -12,12 +12,14 @@ from ai_agent_loop.project import Project, ProjectRegistry
 from ai_agent_loop.risk import RiskAssessment
 from ai_agent_loop.settings import LoopSettings, ProviderSettings, load_settings
 from ai_agent_loop.store import RunStore, render_report
+from ai_agent_loop.workbench import build_workbench_snapshot, render_workbench_html
 
 __all__ = [
     "Agent",
     "AgentStep",
     "AutonomousRunner",
     "build_critique",
+    "build_workbench_snapshot",
     "DeterministicFakeProvider",
     "Goal",
     "load_settings",
@@ -33,6 +35,7 @@ __all__ = [
     "RunStore",
     "render_report",
     "render_critique",
+    "render_workbench_html",
     "resolve_provider",
     "run_loop",
 ]

@@ -41,6 +41,7 @@ It will focus on:
 |       +-- project.py
 |       +-- settings.py
 |       +-- store.py
+|       +-- workbench.py
 +-- tests/
     +-- test_cli.py
     +-- test_loop.py
@@ -127,6 +128,14 @@ loopforge --project E:\path\to\project multi "Assess project readiness"
 
 Multi-agent children are currently read-only and cannot write, commit, push, or delete.
 
+Start the read-only local workbench:
+
+```powershell
+loopforge workbench
+```
+
+The workbench opens a local web UI for projects, run history, event timeline, report sections, Git summary, automation summary, critique, and multi-agent tree.
+
 Run tests:
 
 ```powershell
@@ -139,4 +148,4 @@ python -m unittest discover -s tests
 - Add policy approvals for git push instead of only recording blocked push risk.
 - Expand multi-agent coordination from read-only summaries to approved write scopes.
 - Implement real provider adapters behind the provider interface.
-- Add a desktop/web UI for run timelines, approvals, diffs, and verification output.
+- Add approved resume/write actions to the workbench.

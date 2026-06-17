@@ -154,24 +154,23 @@ If not done:
 
 Goal: make LoopForge feel like software, not just a CLI.
 
-- Ship a local desktop app.
+- Ship a local read-only web workbench.
 - Show project sidebar and run history.
 - Show timeline of loop events.
-- Show file diffs and command output.
-- Show failures and retries.
-- Add dashboard charts for run status, verification, cost, duration, and failure causes.
-- Let users approve, retry, skip, or resume steps.
+- Show report sections for Git Summary, Automation Summary, Critique, and Multi-Agent Summary.
+- Show failures and blocked states.
+- Reserve dashboard charts for a later loop.
+- Do not approve, retry, skip, resume, write, call models, log in, or sync.
 - Add Chinese default UI with English language switch.
-- Add settings for local-only mode, optional sync, provider config, and privacy rules.
 - Keep the UI local-first.
 
 Done means:
 
-- A user can operate the common workflows without the CLI.
+- A user can inspect common workflows without the CLI.
 - The app can switch between Chinese and English.
-- Multiple projects can be opened and managed.
+- Multiple projects can be opened from the local store.
 - Reports, failures, and blocked states are visible without reading raw files.
-- Charts are tied to concrete run data and never replace raw evidence.
+- Raw evidence remains available through reports and timeline events.
 
 If not done:
 
