@@ -184,8 +184,9 @@ Must complete:
 - Provider config model.
 - OpenAI-compatible provider settings.
 - Claude Code or Claude-compatible integration plan.
-- Codex-style integration plan.
 - Local HTTP provider settings.
+- Deterministic fake provider for tests.
+- `loopforge run --require-model` setup gate.
 - Token, cost, and elapsed-time fields in run metadata.
 
 Verification:
@@ -193,6 +194,7 @@ Verification:
 - A run can execute with deterministic fake provider in tests.
 - Missing provider config produces a blocked setup decision.
 - Provider settings avoid storing secrets in public files.
+- Ordinary non-model runs continue with deterministic local fallback.
 
 If incomplete:
 

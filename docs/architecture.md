@@ -25,7 +25,9 @@ src/ai_agent_loop/
 +-- critique.py Dynamic run critique
 +-- goal.py     Goal model
 +-- loop.py     Loop primitives
++-- provider.py Provider protocol and deterministic fake provider
 +-- project.py  Project registry and metadata
++-- settings.py Project settings models without secret persistence
 +-- store.py    Local run persistence
 +-- events.py   Structured event records
 +-- policy.py   Policy decisions and blocked-state rules
@@ -85,6 +87,7 @@ Each run should be durable and easy to inspect:
 |   +-- <project_id>/
 |       +-- project.json
 |       +-- memory.json
+|       +-- settings.json
 |       +-- policy.json
 |       +-- runs/
 |           +-- <run_id>/
@@ -98,7 +101,7 @@ Each run should be durable and easy to inspect:
 |               +-- artifacts/
 ```
 
-Only `projects.json`, `project.json`, `memory.json`, `goal.json`, `events.jsonl`, and `report.md` exist today.
+Only `projects.json`, `project.json`, `memory.json`, optional `settings.json`, `goal.json`, `events.jsonl`, command artifacts, and `report.md` exist today.
 
 ## Project Memory
 
@@ -130,9 +133,9 @@ The loop engine owns:
 - Verification.
 - Report generation.
 
-Provider configuration is user-controlled. The product should support OpenAI-compatible providers, Claude Code style integrations, Codex style integrations, and local HTTP models over time.
+Provider configuration is user-controlled. The current implementation has a provider settings model, deterministic fake provider, and local fallback metadata. It defines OpenAI-compatible, Claude-compatible, and local HTTP settings shapes without calling external APIs yet.
 
-Runs should record model name, latency, token usage, and cost when available.
+Runs record provider, model, latency, token usage, and cost fields when available. Settings may store an environment variable name for a key, but must not store the secret value.
 
 ## Tool Boundary
 

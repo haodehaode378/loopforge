@@ -66,6 +66,7 @@ class RunStore:
             "effective_status": infer_status(events),
             "blocked_reason": blocked_reason,
             "goal": goal_record.get("description", ""),
+            "metadata": goal_record.get("metadata", {}),
             "event_count": len(events),
             "report_path": str(run_dir / "report.md"),
         }
@@ -152,6 +153,7 @@ def render_report(result: LoopResult) -> str:
         f"- {step.name}: {step.detail}" for step in result.steps
     )
     critique = render_critique([step.to_dict() for step in result.steps])
+    metadata = render_metadata(result.metadata)
 
     return (
         f"# Agent Run {result.run_id}\n\n"
@@ -159,6 +161,7 @@ def render_report(result: LoopResult) -> str:
         f"Project: {result.project}\n\n"
         f"Project ID: {result.project_id}\n\n"
         f"Project Path: {result.project_path}\n\n"
+        f"## Run Metadata\n\n{metadata}\n\n"
         f"## Goal\n\n{result.goal.description}\n\n"
         f"## Assumptions\n\n{assumptions}\n\n"
         f"## Success Criteria\n\n{criteria}\n\n"
@@ -174,7 +177,23 @@ def goal_to_record(result: LoopResult) -> dict[str, object]:
     record["project_id"] = result.project_id
     record["project_path"] = result.project_path
     record["status"] = result.status
+    record["metadata"] = result.metadata
     return record
+
+
+def render_metadata(metadata: dict[str, object]) -> str:
+    if not metadata:
+        return "- provider: unknown"
+    keys = [
+        "provider",
+        "provider_kind",
+        "model",
+        "latency_ms",
+        "input_tokens",
+        "output_tokens",
+        "cost_usd",
+    ]
+    return "\n".join(f"- {key}: {metadata.get(key)}" for key in keys)
 
 
 def infer_status(events: list[dict[str, object]]) -> str:

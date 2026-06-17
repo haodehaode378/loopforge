@@ -32,6 +32,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Print the loop trace without saving artifacts.",
     )
+    run_parser.add_argument(
+        "--require-model",
+        action="store_true",
+        help="Block the run if no model provider is configured.",
+    )
 
     inspect_parser = subparsers.add_parser("inspect", help="List or show runs.")
     inspect_parser.add_argument("run_id", nargs="?", help="Run ID to inspect.")
@@ -70,7 +75,13 @@ def main(argv: list[str] | None = None) -> None:
     configure_stdio()
     args = build_parser().parse_args(normalize_argv(argv))
     if args.command == "run":
-        run_goal(args.goal, args.store, args.project, persist=not args.no_persist)
+        run_goal(
+            args.goal,
+            args.store,
+            args.project,
+            persist=not args.no_persist,
+            require_model=args.require_model,
+        )
         return
 
     if args.command == "inspect":
@@ -123,15 +134,27 @@ def normalize_argv(argv: list[str] | None) -> list[str]:
     return raw_args
 
 
-def run_goal(goal: str, store: str, project: str, persist: bool) -> None:
+def run_goal(
+    goal: str,
+    store: str,
+    project: str,
+    persist: bool,
+    require_model: bool = False,
+) -> None:
     agent = Agent(store_root=store, project_path=project)
-    result = agent.run(goal, persist=persist)
+    result = agent.run(goal, persist=persist, require_model=require_model)
     for step in result.steps:
         print(f"{step.name} [{step.status}]: {step.detail}")
 
+    status = result.status
+    if persist:
+        status = RunStore(store, project_path=project).read_summary(result.run_id)["effective_status"]
+
     print(f"run_id: {result.run_id}")
     print(f"project: {result.project}")
-    print(f"status: {result.status}")
+    print(f"status: {status}")
+    print(f"provider: {result.metadata.get('provider')}")
+    print(f"model: {result.metadata.get('model')}")
     if persist:
         print(f"artifacts: {store}/projects/{result.project_id}/runs/{result.run_id}")
 
@@ -216,6 +239,10 @@ def print_summary(summary: dict[str, object]) -> None:
     print(f"status: {summary['effective_status']}")
     if summary.get("blocked_reason"):
         print(f"blocked_reason: {summary['blocked_reason']}")
+    metadata = summary.get("metadata", {})
+    if isinstance(metadata, dict):
+        print(f"provider: {metadata.get('provider')}")
+        print(f"model: {metadata.get('model')}")
     print(f"goal: {summary['goal']}")
     print(f"event_count: {summary['event_count']}")
     print(f"report_path: {summary['report_path']}")

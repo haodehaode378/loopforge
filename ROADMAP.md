@@ -80,18 +80,19 @@ Goal: support multiple model backends through one interface.
 
 - Define a `ModelProvider` protocol.
 - Add provider config for OpenAI-compatible APIs.
-- Add provider config for Claude Code style workflows or Claude-compatible APIs.
-- Add provider config for Codex style workflows when available.
+- Add provider config for Claude-compatible APIs.
 - Add local model provider via HTTP endpoint.
-- Store model name, prompt hash, and token/cost metadata when available.
+- Add deterministic fake provider for tests.
+- Store model name, latency, and token/cost metadata when available.
 - Keep the core loop runnable without a model for testing.
-- Add settings UI for choosing provider per project.
+- Reserve settings UI for choosing provider per project.
 
 Done means:
 
 - Users can configure providers without editing source files.
 - Runs record model, latency, token usage, and cost when available.
-- Blocked private content is excluded from model payloads.
+- Missing provider config only blocks model-required runs.
+- Provider settings store env var names, not secret values.
 
 If not done:
 

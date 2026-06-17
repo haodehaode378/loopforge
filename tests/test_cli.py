@@ -41,6 +41,13 @@ class CliArgTests(unittest.TestCase):
         self.assertEqual(args.tool_command, "shell")
         self.assertEqual(args.shell_command, "python --version")
 
+    def test_run_can_require_model_provider(self) -> None:
+        args = build_parser().parse_args(normalize_argv(["run", "--require-model", "Ship"]))
+
+        self.assertEqual(args.command, "run")
+        self.assertTrue(args.require_model)
+        self.assertEqual(args.goal, "Ship")
+
     def test_resume_command_is_reserved(self) -> None:
         args = build_parser().parse_args(normalize_argv(["resume", "run-1"]))
 

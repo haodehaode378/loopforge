@@ -32,6 +32,7 @@ class LoopResult:
     project: str
     project_id: str
     project_path: str
+    metadata: dict[str, object]
 
     @property
     def done(self) -> bool:
@@ -43,6 +44,7 @@ def run_loop(
     project: str | None = None,
     project_id: str | None = None,
     project_path: str | None = None,
+    metadata: dict[str, object] | None = None,
 ) -> LoopResult:
     """Run the minimal deterministic loop for a user goal."""
 
@@ -74,4 +76,5 @@ def run_loop(
         project=resolved_project,
         project_id=resolved_project_id,
         project_path=resolved_project_path,
+        metadata=metadata or {},
     )

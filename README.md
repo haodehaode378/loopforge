@@ -35,7 +35,9 @@ It will focus on:
 |       +-- cli.py
 |       +-- goal.py
 |       +-- loop.py
+|       +-- provider.py
 |       +-- project.py
+|       +-- settings.py
 |       +-- store.py
 +-- tests/
     +-- test_cli.py
@@ -95,6 +97,14 @@ loopforge --project E:\path\to\project run "Continue development"
 loopforge --project E:\path\to\project inspect
 ```
 
+Optional provider settings live at `.agent/projects/<project_id>/settings.json`. Settings may contain an environment variable name such as `OPENAI_API_KEY`, but must not contain the secret value itself.
+
+Require a configured model provider for a run:
+
+```powershell
+loopforge run --require-model "Draft an implementation plan"
+```
+
 Run tests:
 
 ```powershell
@@ -104,5 +114,5 @@ python -m unittest discover -s tests
 ## Next Steps
 
 - Add tool adapters for files, shell, Git, and tests.
-- Add model/provider code behind a small interface.
+- Implement real provider adapters behind the provider interface.
 - Add a desktop/web UI for run timelines, approvals, diffs, and verification output.
