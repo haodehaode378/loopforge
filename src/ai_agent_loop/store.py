@@ -55,12 +55,15 @@ class RunStore:
 
         goal_record = json.loads(goal_path.read_text(encoding="utf-8"))
         events = self.read_events(run_id)
+        blocked_reason = find_blocked_reason(events)
         return {
             "run_id": run_id,
             "project": goal_record.get("project", "unknown"),
             "project_id": goal_record.get("project_id", self.project.id),
             "project_path": goal_record.get("project_path", self.project.path),
             "status": goal_record.get("status", infer_status(events)),
+            "effective_status": infer_status(events),
+            "blocked_reason": blocked_reason,
             "goal": goal_record.get("description", ""),
             "event_count": len(events),
             "report_path": str(run_dir / "report.md"),
@@ -80,7 +83,14 @@ class RunStore:
         report_path = self.run_dir(run_id) / "report.md"
         if not report_path.exists():
             raise ValueError(f"report not found: {run_id}")
-        return report_path.read_text(encoding="utf-8")
+        report = report_path.read_text(encoding="utf-8")
+        events = self.read_events(run_id)
+        effective_status = infer_status(events)
+        report = replace_status_line(report, effective_status)
+        blocked_reason = find_blocked_reason(events)
+        if blocked_reason and "## Blocked Reason" not in report:
+            report += f"\n## Blocked Reason\n\n{blocked_reason}\n"
+        return report
 
     def append_event(self, run_id: str, event: dict[str, object]) -> None:
         run_dir = self.run_dir(run_id)
@@ -169,10 +179,26 @@ def goal_to_record(result: LoopResult) -> dict[str, object]:
 
 def infer_status(events: list[dict[str, object]]) -> str:
     statuses = {str(event.get("status", "")) for event in events}
-    if "failed" in statuses:
-        return "failed"
     if "blocked" in statuses:
         return "blocked"
+    if "failed" in statuses:
+        return "failed"
     if "cancelled" in statuses:
         return "cancelled"
     return "done" if events else "unknown"
+
+
+def find_blocked_reason(events: list[dict[str, object]]) -> str:
+    for event in reversed(events):
+        if event.get("status") == "blocked":
+            return str(event.get("detail") or event.get("metadata", {}).get("reason") or "")
+    return ""
+
+
+def replace_status_line(report: str, status: str) -> str:
+    lines = report.splitlines()
+    for index, line in enumerate(lines):
+        if line.startswith("Status: "):
+            lines[index] = f"Status: {status}"
+            return "\n".join(lines) + ("\n" if report.endswith("\n") else "")
+    return report

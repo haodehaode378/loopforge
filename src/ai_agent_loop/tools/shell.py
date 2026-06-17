@@ -6,6 +6,7 @@ import subprocess
 from dataclasses import dataclass
 
 from ai_agent_loop.events import EventRecord
+from ai_agent_loop.policy import evaluate_risk, should_block_for_repeated_failures
 from ai_agent_loop.risk import classify_shell_command
 from ai_agent_loop.store import RunStore
 
@@ -24,6 +25,28 @@ class ShellTools:
         self.run_id = run_id
 
     def run(self, command: str, timeout_seconds: int = 60) -> ShellResult:
+        risk = classify_shell_command(command)
+        decision = evaluate_risk(risk.to_dict())
+        if not decision.allowed:
+            event = EventRecord(
+                type="policy_decision",
+                name="policy.blocked",
+                detail=decision.reason,
+                status="blocked",
+                risk=risk.to_dict(),
+                metadata={
+                    "command": command,
+                    "policy": decision.to_dict(),
+                },
+            )
+            self.store.append_event(self.run_id, event.to_dict())
+            return ShellResult(
+                command=command,
+                exit_code=-1,
+                stdout="",
+                stderr=decision.reason,
+            )
+
         completed = subprocess.run(
             command,
             cwd=self.store.project.path,
@@ -61,7 +84,7 @@ class ShellTools:
             name="shell.run",
             detail=f"{command} -> exit {result.exit_code}",
             status=status,
-            risk=classify_shell_command(command).to_dict(),
+            risk=risk.to_dict(),
             metadata={
                 "command": command,
                 "exit_code": result.exit_code,
@@ -73,4 +96,16 @@ class ShellTools:
             },
         )
         self.store.append_event(self.run_id, event.to_dict())
+        if status == "failed" and should_block_for_repeated_failures(self.store.read_events(self.run_id)):
+            blocked = EventRecord(
+                type="policy_decision",
+                name="policy.blocked",
+                detail="Three consecutive failures reached the blocked threshold.",
+                status="blocked",
+                metadata={
+                    "reason": "repeated_failures",
+                    "failure_limit": 3,
+                },
+            )
+            self.store.append_event(self.run_id, blocked.to_dict())
         return result

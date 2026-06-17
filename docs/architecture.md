@@ -27,6 +27,7 @@ src/ai_agent_loop/
 +-- project.py  Project registry and metadata
 +-- store.py    Local run persistence
 +-- events.py   Structured event records
++-- policy.py   Policy decisions and blocked-state rules
 +-- risk.py     Risk metadata
 +-- tools/      File and shell tool adapters
 ```
@@ -174,6 +175,13 @@ Full automation is allowed, but must be bounded:
 - Diff capture for code changes.
 - Three consecutive failures on the same objective or step produce `blocked`.
 - Risky operations pause for a decision.
+
+Current policy behavior:
+
+- High-risk shell commands are blocked before execution.
+- Three consecutive failed shell executions append a blocked event.
+- `inspect` and `report` show the blocked reason.
+- `resume` is reserved as a CLI entry point but does not yet continue execution.
 
 High-risk examples:
 

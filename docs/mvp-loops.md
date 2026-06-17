@@ -138,13 +138,14 @@ Must complete:
 - Pause decision model for high-risk actions.
 - Three-failure counter.
 - `blocked` run status with reason and required decision.
-- Resume flow from blocked state.
+- Reserved `resume` CLI entry point without full recovery execution.
 
 Verification:
 
 - Tests simulate three repeated failures and assert `blocked`.
-- Tests simulate high-risk delete and Git push requiring approval.
+- Tests simulate high-risk shell commands requiring approval.
 - Reports explain why a run was blocked.
+- Inspect shows blocked reason.
 
 If incomplete:
 

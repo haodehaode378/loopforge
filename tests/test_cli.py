@@ -35,13 +35,17 @@ class CliArgTests(unittest.TestCase):
         )
 
     def test_shell_tool_command_does_not_override_top_level_command(self) -> None:
-        args = build_parser().parse_args(
-            normalize_argv(["tool", "shell", "python --version"])
-        )
+        args = build_parser().parse_args(normalize_argv(["tool", "shell", "python --version"]))
 
         self.assertEqual(args.command, "tool")
         self.assertEqual(args.tool_command, "shell")
         self.assertEqual(args.shell_command, "python --version")
+
+    def test_resume_command_is_reserved(self) -> None:
+        args = build_parser().parse_args(normalize_argv(["resume", "run-1"]))
+
+        self.assertEqual(args.command, "resume")
+        self.assertEqual(args.run_id, "run-1")
 
 
 if __name__ == "__main__":

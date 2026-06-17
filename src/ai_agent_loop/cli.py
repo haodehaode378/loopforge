@@ -38,6 +38,9 @@ def build_parser() -> argparse.ArgumentParser:
     report_parser = subparsers.add_parser("report", help="Show a run report.")
     report_parser.add_argument("run_id", help="Run ID to report.")
 
+    resume_parser = subparsers.add_parser("resume", help="Reserved resume entry point.")
+    resume_parser.add_argument("run_id", help="Run ID to resume.")
+
     tool_parser = subparsers.add_parser("tool", help="Run a recorded tool call.")
     tool_parser.add_argument(
         "--run-id",
@@ -74,6 +77,10 @@ def main(argv: list[str] | None = None) -> None:
         show_report(args.store, args.project, args.run_id)
         return
 
+    if args.command == "resume":
+        reserve_resume(args.store, args.project, args.run_id)
+        return
+
     if args.command == "tool":
         run_tool(args)
         return
@@ -90,7 +97,7 @@ def configure_stdio() -> None:
 
 def normalize_argv(argv: list[str] | None) -> list[str]:
     raw_args = list(sys.argv[1:] if argv is None else argv)
-    commands = {"run", "inspect", "report", "tool"}
+    commands = {"run", "inspect", "report", "resume", "tool"}
     options_with_values = {"--store", "--project"}
     skip_next = False
     for index, value in enumerate(raw_args):
@@ -142,13 +149,22 @@ def inspect_runs(store: str, project: str, run_id: str | None) -> None:
 
     for summary in runs:
         print(
-            f"{summary['run_id']}  {summary['status']}  "
+            f"{summary['run_id']}  {summary['effective_status']}  "
             f"{summary['project']}  {summary['event_count']} events  {summary['goal']}"
         )
 
 
 def show_report(store: str, project: str, run_id: str) -> None:
     sys.stdout.write(RunStore(store, project_path=project).read_report(run_id))
+
+
+def reserve_resume(store: str, project: str, run_id: str) -> None:
+    summary = RunStore(store, project_path=project).read_summary(run_id)
+    print(f"resume_reserved: {run_id}")
+    print(f"status: {summary['effective_status']}")
+    if summary.get("blocked_reason"):
+        print(f"blocked_reason: {summary['blocked_reason']}")
+    print("Resume execution is reserved for a later loop.")
 
 
 def run_tool(args: argparse.Namespace) -> None:
@@ -184,7 +200,9 @@ def print_summary(summary: dict[str, object]) -> None:
     print(f"project: {summary['project']}")
     print(f"project_id: {summary['project_id']}")
     print(f"project_path: {summary['project_path']}")
-    print(f"status: {summary['status']}")
+    print(f"status: {summary['effective_status']}")
+    if summary.get("blocked_reason"):
+        print(f"blocked_reason: {summary['blocked_reason']}")
     print(f"goal: {summary['goal']}")
     print(f"event_count: {summary['event_count']}")
     print(f"report_path: {summary['report_path']}")
