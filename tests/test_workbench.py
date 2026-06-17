@@ -22,6 +22,7 @@ class WorkbenchTests(unittest.TestCase):
             store_root = root / ".agent"
 
             done = Agent(store_root=store_root, project_path=project).run("Render workbench")
+            ShellTools(RunStore(store_root, project_path=project), done.run_id).run("echo workbench-evidence")
             blocked = Agent(store_root=store_root, project_path=project).run("Blocked workbench")
             ShellTools(RunStore(store_root, project_path=project), blocked.run_id).run("git push origin main")
             multi = MultiAgentRunner(store_root=str(store_root), project_path=str(project)).run(
@@ -39,11 +40,17 @@ class WorkbenchTests(unittest.TestCase):
             self.assertIn(done.run_id, run_ids)
             self.assertIn(blocked.run_id, run_ids)
             self.assertIn(multi.parent_run_id, run_ids)
+            self.assertGreaterEqual(project_data["analytics"]["status_counts"]["blocked"], 1)
+            self.assertGreaterEqual(project_data["analytics"]["command_count"], 1)
 
             parent = next(run for run in project_data["runs"] if run["run_id"] == multi.parent_run_id)
             self.assertEqual(parent["child_run_ids"], multi.child_run_ids)
             self.assertIn("Multi-Agent Summary", parent["sections"])
             self.assertIn("Sharp Review", parent["sections"])
+
+            done_run = next(run for run in project_data["runs"] if run["run_id"] == done.run_id)
+            self.assertEqual(done_run["provider"]["provider"], "Deterministic Local")
+            self.assertIn("workbench-evidence", done_run["command_outputs"][0]["stdout"]["content"])
 
             blocked_run = next(run for run in project_data["runs"] if run["run_id"] == blocked.run_id)
             self.assertEqual(blocked_run["effective_status"], "blocked")
@@ -52,6 +59,11 @@ class WorkbenchTests(unittest.TestCase):
             self.assertIn("项目", html)
             self.assertIn("运行历史", html)
             self.assertIn("事件时间线", html)
+            self.assertIn("图表", html)
+            self.assertIn("Provider 指标", html)
+            self.assertIn("命令输出", html)
+            self.assertIn("事件 JSON", html)
+            self.assertIn("section 深链", html)
             self.assertIn("Multi-Agent Summary", html)
             self.assertIn("Git Summary", html)
             self.assertIn("Automation Summary", html)

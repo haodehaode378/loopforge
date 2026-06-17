@@ -84,6 +84,7 @@ Current workbench behavior:
 - `loopforge workbench` starts a local HTTP UI.
 - `loopforge workbench --snapshot` prints the read-only JSON snapshot.
 - The UI shows project list, run history, event timeline, report sections, Git Summary, Automation Summary, Sharp Review, and Multi-Agent Summary.
+- The UI shows read-only status charts, failed or blocked reason distribution, provider token and cost placeholders, command output previews, event JSON detail, and report section deep links.
 - The UI does not approve, resume, write, call models, log in, or sync.
 
 ## Run Store

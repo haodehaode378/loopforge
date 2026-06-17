@@ -134,7 +134,7 @@ Start the read-only local workbench:
 loopforge workbench
 ```
 
-The workbench opens a local web UI for projects, run history, event timeline, report sections, Git summary, automation summary, critique, and multi-agent tree.
+The workbench opens a local web UI for projects, run history, status charts, blocked or failed reason distribution, event timeline, command output previews, event JSON detail, report section deep links, Git summary, automation summary, critique, and multi-agent tree.
 
 Run tests:
 
@@ -149,3 +149,4 @@ python -m unittest discover -s tests
 - Expand multi-agent coordination from read-only summaries to approved write scopes.
 - Implement real provider adapters behind the provider interface.
 - Add approved resume/write actions to the workbench.
+- Add a diff viewer and approval skeleton before enabling real project writes.

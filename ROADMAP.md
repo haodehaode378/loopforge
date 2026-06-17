@@ -158,8 +158,8 @@ Goal: make LoopForge feel like software, not just a CLI.
 - Show project sidebar and run history.
 - Show timeline of loop events.
 - Show report sections for Git Summary, Automation Summary, Critique, and Multi-Agent Summary.
+- Show status charts, failed or blocked reason distribution, provider metrics, command output previews, event JSON detail, and report section deep links.
 - Show failures and blocked states.
-- Reserve dashboard charts for a later loop.
 - Do not approve, retry, skip, resume, write, call models, log in, or sync.
 - Add Chinese default UI with English language switch.
 - Keep the UI local-first.
@@ -170,7 +170,7 @@ Done means:
 - The app can switch between Chinese and English.
 - Multiple projects can be opened from the local store.
 - Reports, failures, and blocked states are visible without reading raw files.
-- Raw evidence remains available through reports and timeline events.
+- Raw evidence remains available through reports, timeline events, event JSON, and command artifacts.
 
 If not done:
 

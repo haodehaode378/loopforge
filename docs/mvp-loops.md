@@ -309,24 +309,28 @@ If incomplete:
 
 ## Loop 11: Project Progress Report
 
-Goal: make LoopForge useful even when no code is changed.
+Goal: make the read-only workbench useful for deciding what happened without opening raw files.
 
 Must complete:
 
-- Summarize project state.
-- Summarize recent runs.
-- Summarize open risks.
-- Summarize verification status.
-- Suggest next steps.
-- Export report as Markdown.
+- Add run status charts.
+- Add failed and blocked reason distribution.
+- Show provider, model, latency, token, and cost placeholders.
+- Show command stdout and stderr artifact previews.
+- Show event JSON detail.
+- Add report section deep links.
+- Add run search and status filtering.
+- Keep the workbench read-only.
 
 Verification:
 
-- Report works on a project with multiple runs.
-- Report includes failures and blocked decisions.
-- Report does not include private excluded content.
+- UI can read existing `.agent` store data.
+- UI shows command output from stored artifacts.
+- UI can filter runs by text and status.
+- Browser smoke test captures the rendered workbench.
+- No approve, resume, write, model call, login, or sync action is added.
 
 If incomplete:
 
-- Generate a minimal report from run metadata only.
+- Keep Loop 10 workbench behavior as the reliable baseline.
 - Mark missing sections clearly.

@@ -28,7 +28,17 @@ def build_workbench_snapshot(root: Path | str = ".agent") -> dict[str, object]:
     store_root = Path(root)
     registry = ProjectRegistry(store_root)
     projects = []
-    totals = {"projects": 0, "runs": 0, "blocked": 0, "failed": 0, "done": 0}
+    totals = {
+        "projects": 0,
+        "runs": 0,
+        "blocked": 0,
+        "failed": 0,
+        "done": 0,
+        "latency_ms": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cost_usd": 0.0,
+    }
     for project in registry.list_projects():
         project_dir = registry.project_dir(project)
         runs = read_project_runs(project_dir)
@@ -37,12 +47,19 @@ def build_workbench_snapshot(root: Path | str = ".agent") -> dict[str, object]:
             status = str(run.get("effective_status", "unknown"))
             if status in totals:
                 totals[status] += 1
+            provider = run.get("provider", {})
+            if isinstance(provider, dict):
+                totals["latency_ms"] += int(provider.get("latency_ms") or 0)
+                totals["input_tokens"] += int(provider.get("input_tokens") or 0)
+                totals["output_tokens"] += int(provider.get("output_tokens") or 0)
+                totals["cost_usd"] += float(provider.get("cost_usd") or 0.0)
         projects.append(
             {
                 "id": project.id,
                 "name": project.name,
                 "path": project.path,
                 "runs": runs,
+                "analytics": build_project_analytics(runs),
             }
         )
     totals["projects"] = len(projects)
@@ -67,10 +84,12 @@ def read_project_runs(project_dir: Path) -> list[dict[str, object]]:
 def read_run(run_dir: Path) -> dict[str, object]:
     goal_record = json.loads((run_dir / "goal.json").read_text(encoding="utf-8"))
     events = read_events(run_dir / "events.jsonl")
+    events = enrich_events_with_artifacts(events, run_dir)
     report = read_dynamic_report(run_dir / "report.md", events)
     metadata = goal_record.get("metadata", {})
     if not isinstance(metadata, dict):
         metadata = {}
+    provider = extract_provider_metrics(metadata)
     return {
         "run_id": run_dir.name,
         "goal": goal_record.get("description", ""),
@@ -79,6 +98,8 @@ def read_run(run_dir: Path) -> dict[str, object]:
         "blocked_reason": find_blocked_reason(events),
         "event_count": len(events),
         "metadata": metadata,
+        "provider": provider,
+        "command_outputs": collect_command_outputs(events),
         "parent_run_id": metadata.get("parent_run_id", ""),
         "child_run_ids": metadata.get("child_run_ids", []),
         "reviewer_run_id": metadata.get("reviewer_run_id", ""),
@@ -96,6 +117,120 @@ def read_events(path: Path) -> list[dict[str, object]]:
         if line.strip():
             events.append(json.loads(line))
     return events
+
+
+def enrich_events_with_artifacts(
+    events: list[dict[str, object]],
+    run_dir: Path,
+) -> list[dict[str, object]]:
+    enriched = []
+    for event in events:
+        event_copy = dict(event)
+        artifacts = event.get("artifacts", {})
+        previews = {}
+        if isinstance(artifacts, dict):
+            for name, artifact_path in artifacts.items():
+                previews[str(name)] = read_artifact_preview(artifact_path, run_dir)
+        event_copy["artifact_previews"] = previews
+        enriched.append(event_copy)
+    return enriched
+
+
+def read_artifact_preview(path_value: object, run_dir: Path, limit: int = 4000) -> dict[str, object]:
+    path = Path(str(path_value))
+    preview = {"path": str(path), "content": "", "truncated": False, "missing": True}
+    try:
+        resolved_path = path.resolve()
+        resolved_run_dir = run_dir.resolve()
+        if not resolved_path.is_relative_to(resolved_run_dir):
+            preview["content"] = "Artifact path is outside this run directory."
+            return preview
+        if not resolved_path.exists() or not resolved_path.is_file():
+            return preview
+        content = resolved_path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return preview
+    preview["missing"] = False
+    preview["truncated"] = len(content) > limit
+    preview["content"] = content[:limit]
+    return preview
+
+
+def collect_command_outputs(events: list[dict[str, object]]) -> list[dict[str, object]]:
+    commands = []
+    for event in events:
+        if event.get("name") != "shell.run":
+            continue
+        metadata = event.get("metadata", {})
+        if not isinstance(metadata, dict):
+            metadata = {}
+        previews = event.get("artifact_previews", {})
+        commands.append(
+            {
+                "command": metadata.get("command", ""),
+                "exit_code": metadata.get("exit_code"),
+                "status": event.get("status", ""),
+                "stdout": previews.get("stdout", {}),
+                "stderr": previews.get("stderr", {}),
+            }
+        )
+    return commands
+
+
+def extract_provider_metrics(metadata: dict[str, object]) -> dict[str, object]:
+    return {
+        "provider": metadata.get("provider") or "unknown",
+        "provider_kind": metadata.get("provider_kind") or "unknown",
+        "model": metadata.get("model") or "unknown",
+        "latency_ms": int(metadata.get("latency_ms") or 0),
+        "input_tokens": int(metadata.get("input_tokens") or 0),
+        "output_tokens": int(metadata.get("output_tokens") or 0),
+        "cost_usd": float(metadata.get("cost_usd") or 0.0),
+    }
+
+
+def build_project_analytics(runs: list[dict[str, object]]) -> dict[str, object]:
+    statuses = {"done": 0, "failed": 0, "blocked": 0, "unknown": 0}
+    reasons: dict[str, int] = {}
+    providers: dict[str, int] = {}
+    totals = {"latency_ms": 0, "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0}
+    command_count = 0
+    for run in runs:
+        status = str(run.get("effective_status") or "unknown")
+        statuses[status] = statuses.get(status, 0) + 1
+        if status in {"failed", "blocked"}:
+            reason = failure_or_blocked_reason(run)
+            reasons[reason] = reasons.get(reason, 0) + 1
+        provider = run.get("provider", {})
+        if isinstance(provider, dict):
+            provider_name = str(provider.get("provider") or "unknown")
+            providers[provider_name] = providers.get(provider_name, 0) + 1
+            totals["latency_ms"] += int(provider.get("latency_ms") or 0)
+            totals["input_tokens"] += int(provider.get("input_tokens") or 0)
+            totals["output_tokens"] += int(provider.get("output_tokens") or 0)
+            totals["cost_usd"] += float(provider.get("cost_usd") or 0.0)
+        command_outputs = run.get("command_outputs", [])
+        if isinstance(command_outputs, list):
+            command_count += len(command_outputs)
+    return {
+        "status_counts": statuses,
+        "reason_counts": reasons,
+        "provider_counts": providers,
+        "provider_totals": totals,
+        "command_count": command_count,
+    }
+
+
+def failure_or_blocked_reason(run: dict[str, object]) -> str:
+    blocked_reason = str(run.get("blocked_reason") or "").strip()
+    if blocked_reason:
+        return blocked_reason
+    events = run.get("events", [])
+    if isinstance(events, list):
+        for event in reversed(events):
+            if event.get("status") in {"failed", "blocked"}:
+                return str(event.get("detail") or event.get("name") or "unknown")
+    return "unknown"
 
 
 def read_dynamic_report(path: Path, events: list[dict[str, object]]) -> str:
@@ -202,7 +337,7 @@ body {
   background: var(--bg);
   color: var(--text);
 }
-button, select { font: inherit; }
+button, select, input { font: inherit; }
 .shell {
   height: 100dvh;
   display: grid;
@@ -239,8 +374,9 @@ button, select { font: inherit; }
 .project:hover, .run:hover, .project.active, .run.active { background: #eef2ec; border-color: var(--line); }
 .project-name, .run-goal { font-weight: 650; overflow-wrap: anywhere; }
 .path, .run-meta { color: var(--muted); font-size: 12px; margin-top: 4px; overflow-wrap: anywhere; }
-.toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+.toolbar { display: grid; grid-template-columns: 1fr 140px; gap: 8px; align-items: center; margin-bottom: 12px; }
 .search { width: 100%; border: 1px solid var(--line); border-radius: 6px; padding: 9px; background: #fff; }
+.filter { border: 1px solid var(--line); border-radius: 6px; padding: 9px; background: #fff; color: var(--text); }
 .status {
   display: inline-flex;
   align-items: center;
@@ -259,6 +395,7 @@ button, select { font: inherit; }
   background: var(--panel);
   padding: 9px 10px;
   border-radius: 0 6px 6px 0;
+  cursor: pointer;
 }
 .event.done { border-left-color: var(--ok); }
 .event.failed { border-left-color: var(--danger); }
@@ -286,6 +423,44 @@ button, select { font: inherit; }
   font-size: 12px;
   overflow-wrap: anywhere;
 }
+.chart-panel, .evidence, .provider-grid {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  padding: 10px;
+  margin-bottom: 12px;
+}
+.chart-row {
+  display: grid;
+  grid-template-columns: 92px 1fr 34px;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+  margin: 7px 0;
+}
+.bar-track { height: 8px; background: #edf0ea; border-radius: 999px; overflow: hidden; }
+.bar-fill { height: 100%; background: var(--accent); border-radius: 999px; }
+.bar-fill.failed { background: var(--danger); }
+.bar-fill.blocked { background: var(--warn); }
+.bar-fill.done { background: var(--ok); }
+.provider-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.provider-card { border: 1px solid var(--line); border-radius: 6px; padding: 8px; background: #fbfcfa; min-width: 0; }
+.provider-label { color: var(--muted); font-size: 11px; text-transform: uppercase; }
+.provider-value { font-weight: 650; overflow-wrap: anywhere; margin-top: 4px; }
+.evidence-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+.code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 12px;
+  background: #f6f7f4;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px;
+  max-height: 220px;
+  overflow: auto;
+}
+.deep-link { color: var(--muted); font-size: 12px; margin-top: 5px; overflow-wrap: anywhere; }
 .tree { border: 1px solid var(--line); border-radius: 6px; padding: 10px; background: #fbfcfa; margin-bottom: 10px; }
 .tree-row { padding: 5px 0; font-size: 13px; }
 .empty { color: var(--muted); padding: 24px; text-align: center; border: 1px dashed var(--line); border-radius: 6px; }
@@ -301,27 +476,34 @@ const snapshot = JSON.parse(document.getElementById('snapshot').textContent);
 const labels = {
   zh: {
     projects: '项目', runs: '运行历史', timeline: '事件时间线', detail: '运行详情',
-    search: '搜索目标或状态', report: '报告', multi: '多 Agent 树', empty: '暂无数据',
-    language: 'English', status: '状态', events: '事件', path: '路径'
+    search: '搜索目标、状态、run id', report: '报告', multi: '多 Agent 树', empty: '暂无数据',
+    language: 'English', status: '状态', events: '事件', path: '路径', charts: '图表',
+    reasons: '失败 / Blocked 原因', provider: 'Provider 指标', commands: '命令输出',
+    eventJson: '事件 JSON', all: '全部状态', sectionLink: 'section 深链'
   },
   en: {
     projects: 'Projects', runs: 'Run history', timeline: 'Event timeline', detail: 'Run detail',
-    search: 'Search goal or status', report: 'Report', multi: 'Multi-agent tree', empty: 'No data',
-    language: '中文', status: 'Status', events: 'Events', path: 'Path'
+    search: 'Search goal, status, run id', report: 'Report', multi: 'Multi-agent tree', empty: 'No data',
+    language: '中文', status: 'Status', events: 'Events', path: 'Path', charts: 'Charts',
+    reasons: 'Failed / blocked reasons', provider: 'Provider metrics', commands: 'Command output',
+    eventJson: 'Event JSON', all: 'All statuses', sectionLink: 'Section deep link'
   }
 };
-let state = { lang: 'zh', project: 0, run: 0, section: 'Overview', query: '' };
+let state = { lang: 'zh', project: 0, run: 0, section: 'Overview', query: '', status: 'all', event: 0 };
+hydrateFromHash();
 
 function t(key) { return labels[state.lang][key] || key; }
 function esc(value) {
   return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 }
-function project() { return snapshot.projects[state.project] || {runs: []}; }
+function project() { return snapshot.projects[state.project] || {runs: [], analytics: {}}; }
 function runs() {
   const q = state.query.toLowerCase();
-  return (project().runs || []).filter(run =>
-    !q || `${run.goal} ${run.effective_status} ${run.run_id}`.toLowerCase().includes(q)
-  );
+  return (project().runs || []).filter(run => {
+    const text = `${run.goal} ${run.effective_status} ${run.run_id}`.toLowerCase();
+    const statusMatch = state.status === 'all' || run.effective_status === state.status;
+    return statusMatch && (!q || text.includes(q));
+  });
 }
 function selectedRun() { return runs()[state.run] || runs()[0] || null; }
 
@@ -336,6 +518,7 @@ function render() {
           <span class="metric">${t('projects')}: ${totals.projects || 0}</span>
           <span class="metric">${t('runs')}: ${totals.runs || 0}</span>
           <span class="metric">blocked: ${totals.blocked || 0}</span>
+          <span class="metric">$${Number(totals.cost_usd || 0).toFixed(4)}</span>
           <button class="tab" onclick="toggleLang()">${t('language')}</button>
         </div>
       </header>
@@ -356,20 +539,52 @@ function renderProjects() {
 function renderRuns(current) {
   const list = runs();
   return `
-    <div class="toolbar"><input class="search" placeholder="${t('search')}" value="${esc(state.query)}" oninput="setQuery(this.value)"></div>
+    ${renderCharts(project().analytics || {})}
+    <div class="toolbar">
+      <input class="search" placeholder="${t('search')}" value="${esc(state.query)}" oninput="setQuery(this.value)">
+      <select class="filter" onchange="setStatus(this.value)">
+        ${['all', 'done', 'failed', 'blocked', 'unknown'].map(value =>
+          `<option value="${value}" ${state.status === value ? 'selected' : ''}>${value === 'all' ? t('all') : value}</option>`
+        ).join('')}
+      </select>
+    </div>
     <div class="section-title">${t('runs')}</div>
     ${list.length ? list.map((run, index) => `
       <button class="run ${run === current ? 'active' : ''}" onclick="selectRun(${index})">
         <div><span class="status ${esc(run.effective_status)}">${esc(run.effective_status)}</span>${esc(run.run_id)}</div>
         <div class="run-goal">${esc(run.goal)}</div>
-        <div class="run-meta">${run.event_count} ${t('events')}</div>
+        <div class="run-meta">${run.event_count} ${t('events')} · ${esc((run.provider || {}).provider)} / ${esc((run.provider || {}).model)}</div>
       </button>`).join('') : `<div class="empty">${t('empty')}</div>`}
     <div class="section-title">${t('timeline')}</div>
     ${current ? renderTimeline(current) : ''}`;
 }
+function renderCharts(analytics) {
+  return `<div class="chart-panel">
+    <div class="section-title">${t('charts')}</div>
+    ${renderBarChart(analytics.status_counts || {}, ['done', 'failed', 'blocked', 'unknown'])}
+    <div class="section-title">${t('reasons')}</div>
+    ${renderReasonChart(analytics.reason_counts || {})}
+  </div>`;
+}
+function renderBarChart(counts, order) {
+  const max = Math.max(1, ...Object.values(counts).map(Number));
+  return order.map(name => chartRow(name, counts[name] || 0, max, name)).join('');
+}
+function renderReasonChart(counts) {
+  const entries = Object.entries(counts);
+  if (!entries.length) return `<div class="run-meta">${t('empty')}</div>`;
+  const max = Math.max(1, ...entries.map(([, count]) => Number(count)));
+  return entries.map(([name, count]) => chartRow(name, count, max, 'blocked')).join('');
+}
+function chartRow(name, count, max, tone) {
+  const width = Math.round((Number(count) / max) * 100);
+  return `<div class="chart-row">
+    <div>${esc(name)}</div><div class="bar-track"><div class="bar-fill ${esc(tone)}" style="width:${width}%"></div></div><div>${esc(count)}</div>
+  </div>`;
+}
 function renderTimeline(run) {
-  return `<div class="timeline">${(run.events || []).map(event => `
-    <div class="event ${esc(event.status)}">
+  return `<div class="timeline">${(run.events || []).map((event, index) => `
+    <div class="event ${esc(event.status)}" onclick="selectEvent(${index})">
       <div class="event-name">${esc(event.name)} <span class="status ${esc(event.status)}">${esc(event.status)}</span></div>
       <div class="event-detail">${esc(event.detail || '')}</div>
     </div>`).join('')}</div>`;
@@ -378,14 +593,50 @@ function renderDetail(run) {
   if (!run) return `<div class="empty">${t('empty')}</div>`;
   const sections = run.sections || {};
   if (!sections[state.section]) state.section = sections['Multi-Agent Summary'] ? 'Multi-Agent Summary' : Object.keys(sections)[0] || 'Overview';
+  syncHash(run);
   return `
     <div class="section-title">${t('detail')}</div>
     <h2>${esc(run.goal)}</h2>
     <div><span class="status ${esc(run.effective_status)}">${esc(run.effective_status)}</span>${esc(run.run_id)}</div>
+    ${renderProvider(run.provider || {})}
     ${renderTree(run)}
     <div class="tabs">${Object.keys(sections).map(name => `
       <button class="tab ${name === state.section ? 'active' : ''}" onclick="selectSection('${escAttr(name)}')">${esc(tabName(name))}</button>`).join('')}</div>
-    <div class="report">${esc(sections[state.section] || run.report || '')}</div>`;
+    <div class="deep-link">${t('sectionLink')}: #run=${esc(run.run_id)}&section=${esc(encodeURIComponent(state.section))}</div>
+    <div class="report">${esc(sections[state.section] || run.report || '')}</div>
+    ${renderEvidence(run)}`;
+}
+function renderProvider(provider) {
+  return `<div class="section-title">${t('provider')}</div>
+  <div class="provider-grid">
+      ${providerCard('provider', provider.provider)}
+      ${providerCard('model', provider.model)}
+      ${providerCard('latency_ms', provider.latency_ms)}
+      ${providerCard('tokens/cost', `${Number(provider.input_tokens || 0) + Number(provider.output_tokens || 0)} / $${Number(provider.cost_usd || 0).toFixed(4)}`)}
+    </div>`;
+}
+function providerCard(label, value) {
+  return `<div class="provider-card"><div class="provider-label">${esc(label)}</div><div class="provider-value">${esc(value)}</div></div>`;
+}
+function renderEvidence(run) {
+  const event = (run.events || [])[state.event] || (run.events || [])[0] || {};
+  return `<div class="evidence">
+    <div class="section-title">${t('commands')}</div>
+    ${renderCommandOutputs(run.command_outputs || [])}
+    <div class="section-title">${t('eventJson')}</div>
+    <div class="code">${esc(JSON.stringify(event, null, 2))}</div>
+  </div>`;
+}
+function renderCommandOutputs(commands) {
+  if (!commands.length) return `<div class="run-meta">${t('empty')}</div>`;
+  return commands.map(command => `
+    <details open>
+      <summary>${esc(command.command)} -> exit ${esc(command.exit_code)}</summary>
+      <div class="evidence-grid">
+        <div><div class="run-meta">stdout</div><div class="code">${esc((command.stdout || {}).content || '')}</div></div>
+        <div><div class="run-meta">stderr</div><div class="code">${esc((command.stderr || {}).content || '')}</div></div>
+      </div>
+    </details>`).join('');
 }
 function renderTree(run) {
   const children = Array.isArray(run.child_run_ids) ? run.child_run_ids : [];
@@ -407,10 +658,31 @@ function tabName(name) {
   return map[name] || name;
 }
 function escAttr(value) { return String(value).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
-function selectProject(index) { state.project = index; state.run = 0; state.section = 'Overview'; render(); }
-function selectRun(index) { state.run = index; state.section = 'Overview'; render(); }
+function selectProject(index) { state.project = index; state.run = 0; state.event = 0; state.section = 'Overview'; render(); }
+function selectRun(index) { state.run = index; state.event = 0; state.section = 'Overview'; render(); }
 function selectSection(name) { state.section = name; render(); }
-function setQuery(value) { state.query = value; state.run = 0; render(); }
+function selectEvent(index) { state.event = index; render(); }
+function setQuery(value) { state.query = value; state.run = 0; state.event = 0; render(); }
+function setStatus(value) { state.status = value; state.run = 0; state.event = 0; render(); }
 function toggleLang() { state.lang = state.lang === 'zh' ? 'en' : 'zh'; render(); }
+function hydrateFromHash() {
+  const params = new URLSearchParams(location.hash.replace(/^#/, ''));
+  const runId = params.get('run');
+  const section = params.get('section');
+  if (runId) {
+    snapshot.projects.some((project, projectIndex) => {
+      const runIndex = (project.runs || []).findIndex(run => run.run_id === runId);
+      if (runIndex < 0) return false;
+      state.project = projectIndex;
+      state.run = runIndex;
+      return true;
+    });
+  }
+  if (section) state.section = section;
+}
+function syncHash(run) {
+  const hash = `run=${encodeURIComponent(run.run_id)}&section=${encodeURIComponent(state.section)}`;
+  if (location.hash.replace(/^#/, '') !== hash) history.replaceState(null, '', `#${hash}`);
+}
 render();
 """
