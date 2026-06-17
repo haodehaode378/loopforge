@@ -79,6 +79,14 @@ loopforge inspect <run_id>
 loopforge report <run_id>
 ```
 
+Run recorded tool calls:
+
+```powershell
+loopforge --project E:\path\to\project tool read README.md
+loopforge --project E:\path\to\project tool search *.py
+loopforge --project E:\path\to\project tool shell "python -m unittest discover -s tests"
+```
+
 Use a specific project:
 
 ```powershell

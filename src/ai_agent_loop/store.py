@@ -82,6 +82,31 @@ class RunStore:
             raise ValueError(f"report not found: {run_id}")
         return report_path.read_text(encoding="utf-8")
 
+    def append_event(self, run_id: str, event: dict[str, object]) -> None:
+        run_dir = self.run_dir(run_id)
+        run_dir.mkdir(parents=True, exist_ok=True)
+        events_path = run_dir / "events.jsonl"
+        with events_path.open("a", encoding="utf-8") as file:
+            file.write(json.dumps(event, ensure_ascii=False) + "\n")
+
+    def write_artifact(
+        self,
+        run_id: str,
+        group: str,
+        name: str,
+        content: str,
+    ) -> Path:
+        artifact_dir = self.run_dir(run_id) / group
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+        path = artifact_dir / name
+        path.write_text(content, encoding="utf-8")
+        return path
+
+    def next_artifact_id(self, run_id: str, prefix: str) -> str:
+        artifact_dir = self.run_dir(run_id) / "commands"
+        existing = len(list(artifact_dir.glob(f"{prefix}-*.stdout.txt"))) if artifact_dir.exists() else 0
+        return f"{prefix}-{existing + 1:04d}"
+
     def run_dir(self, run_id: str) -> Path:
         return self.runs_dir() / run_id
 

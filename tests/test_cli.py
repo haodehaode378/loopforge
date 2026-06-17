@@ -1,6 +1,6 @@
 import unittest
 
-from ai_agent_loop.cli import normalize_argv
+from ai_agent_loop.cli import build_parser, normalize_argv
 
 
 class CliArgTests(unittest.TestCase):
@@ -33,6 +33,15 @@ class CliArgTests(unittest.TestCase):
             normalize_argv(["--store", "tmp-runs", "Ship the MVP"]),
             ["--store", "tmp-runs", "run", "Ship the MVP"],
         )
+
+    def test_shell_tool_command_does_not_override_top_level_command(self) -> None:
+        args = build_parser().parse_args(
+            normalize_argv(["tool", "shell", "python --version"])
+        )
+
+        self.assertEqual(args.command, "tool")
+        self.assertEqual(args.tool_command, "shell")
+        self.assertEqual(args.shell_command, "python --version")
 
 
 if __name__ == "__main__":

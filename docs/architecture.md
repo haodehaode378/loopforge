@@ -26,6 +26,9 @@ src/ai_agent_loop/
 +-- loop.py     Loop primitives
 +-- project.py  Project registry and metadata
 +-- store.py    Local run persistence
++-- events.py   Structured event records
++-- risk.py     Risk metadata
++-- tools/      File and shell tool adapters
 ```
 
 ## Planned Modules
@@ -148,13 +151,14 @@ Full outputs can be stored as separate files when large.
 Tool classes:
 
 - File read.
-- File edit.
-- File delete.
+- File search.
+- File edit. Planned.
+- File delete. Risk interface only for now.
 - Shell command.
-- Git diff.
-- Git commit.
-- Git push.
-- Test runner.
+- Git diff. Planned.
+- Git commit. Planned.
+- Git push. Risk interface only for now.
+- Test runner. Planned.
 - Report generator.
 
 Each tool call must include risk metadata.

@@ -109,19 +109,19 @@ Goal: let the agent work in code while recording every action.
 Must complete:
 
 - File read tool.
-- File edit tool.
-- File delete tool with risk metadata.
+- File search tool.
 - Shell tool with stdout/stderr capture.
-- Git diff, commit, and push tools.
-- Test runner tool.
-- Tool events in `events.jsonl`.
+- Tool event recording in `events.jsonl`.
+- Risk metadata for file read, file search, and shell execution.
+- Risk interfaces for file delete and Git push without executable delete/push behavior.
+- CLI smoke entry for recorded file and shell tool calls.
 
 Verification:
 
 - Tests cover each tool's event output.
 - Shell output is saved as artifacts.
-- Git diff is captured before and after edits.
-- Risk metadata exists for delete, push, and shell actions.
+- Risk metadata exists for read, search, shell, delete, and push.
+- File read rejects paths outside the selected project.
 
 If incomplete:
 
