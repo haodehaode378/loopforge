@@ -77,6 +77,7 @@ Inspect run history:
 loopforge inspect
 loopforge inspect <run_id>
 loopforge report <run_id>
+loopforge critique <run_id>
 ```
 
 Run recorded tool calls:

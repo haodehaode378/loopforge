@@ -22,6 +22,7 @@ Project Store + Run Store
 src/ai_agent_loop/
 +-- agent.py    Agent facade
 +-- cli.py      CLI entry point
++-- critique.py Dynamic run critique
 +-- goal.py     Goal model
 +-- loop.py     Loop primitives
 +-- project.py  Project registry and metadata

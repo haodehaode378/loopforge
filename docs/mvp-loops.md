@@ -152,7 +152,30 @@ If incomplete:
 - Do not enable full automation.
 - Require manual confirmation for all write actions.
 
-## Loop 5: Provider Settings
+## Loop 5: Critique Engine
+
+Goal: make sharp review a dynamic local engine instead of a fixed template.
+
+Must complete:
+
+- Add `critique.py`.
+- Generate critique from run events.
+- Add `loopforge critique <run_id>`.
+- Make reports include dynamic Scope control, Product alignment, Verification quality, Risk review, and Next action.
+- Cover successful, failed, and blocked runs in tests.
+
+Verification:
+
+- Successful run critique mentions verification.
+- Blocked run critique mentions blocked decision and risk handling.
+- Failed run critique mentions failed events and next action.
+- Report automatically includes dynamic critique sections.
+
+If incomplete:
+
+- Keep static sharp review text and do not use critique output as a quality gate.
+
+## Loop 6: Provider Settings
 
 Goal: let users configure models without changing source code.
 
@@ -176,7 +199,7 @@ If incomplete:
 - Keep deterministic local loop as fallback.
 - Do not require a provider for non-model CLI commands.
 
-## Loop 6: Autonomous Development Run
+## Loop 7: Autonomous Development Run
 
 Goal: complete the first end-to-end autonomous code task.
 
@@ -202,7 +225,7 @@ If incomplete:
 - Preserve all artifacts for review.
 - Do not auto-commit.
 
-## Loop 7: Git Commit And Push
+## Loop 8: Git Commit And Push
 
 Goal: let automation publish code when policy allows.
 
@@ -225,7 +248,7 @@ If incomplete:
 - Stop after local diff and report.
 - Do not push.
 
-## Loop 8: Dynamic Multi-Agent
+## Loop 9: Dynamic Multi-Agent
 
 Goal: split larger work into dynamically generated child runs.
 
@@ -249,7 +272,7 @@ If incomplete:
 - Fall back to single-agent execution.
 - Keep child outputs separate.
 
-## Loop 9: Desktop Workbench
+## Loop 10: Desktop Workbench
 
 Goal: ship the first usable local desktop interface.
 
@@ -277,7 +300,7 @@ If incomplete:
 - Keep CLI as the reliable product surface.
 - Do not add sync or team features.
 
-## Loop 10: Project Progress Report
+## Loop 11: Project Progress Report
 
 Goal: make LoopForge useful even when no code is changed.
 

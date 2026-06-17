@@ -54,7 +54,27 @@ If not done:
 - Disable `--auto` for write operations.
 - Keep the run in inspect-only mode until the missing tool boundary is implemented.
 
-## MVP 2: Model Providers
+## MVP 2: Critique Engine
+
+Goal: turn sharp review into a dynamic local rules engine.
+
+- Generate critique from run events.
+- Add Scope control, Product alignment, Verification quality, Risk review, and Next action sections.
+- Add `loopforge critique <run_id>`.
+- Make reports use dynamic critique content.
+- Cover done, failed, and blocked runs.
+
+Done means:
+
+- Reports contain event-aware critique, not a static template.
+- Blocked and failed runs produce specific next actions.
+- Critique requires no model provider.
+
+If not done:
+
+- Keep static sharp review text and avoid using critique as a decision gate.
+
+## MVP 3: Model Providers
 
 Goal: support multiple model backends through one interface.
 
@@ -78,7 +98,7 @@ If not done:
 - Keep deterministic/local loop behavior as the fallback.
 - Mark model-dependent runs as `blocked` with a clear setup question.
 
-## MVP 3: Automation Mode
+## MVP 4: Automation Mode
 
 Goal: allow full autonomous execution for developer tasks.
 
@@ -103,7 +123,7 @@ If not done:
 - Keep automation disabled for high-risk tools.
 - Require manual resume for ambiguous or repeated failures.
 
-## MVP 4: Multi-Agent Runs
+## MVP 5: Multi-Agent Runs
 
 Goal: coordinate dynamically generated subagents.
 
@@ -127,7 +147,7 @@ If not done:
 - Fall back to a single-agent run.
 - Keep child outputs separate until the reviewer step succeeds.
 
-## MVP 5: Workbench UI
+## MVP 6: Workbench UI
 
 Goal: make LoopForge feel like software, not just a CLI.
 

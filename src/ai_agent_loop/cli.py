@@ -6,6 +6,7 @@ import argparse
 import sys
 
 from ai_agent_loop.agent import Agent
+from ai_agent_loop.critique import render_critique
 from ai_agent_loop.store import RunStore
 from ai_agent_loop.tools import FileTools, ShellTools
 
@@ -37,6 +38,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     report_parser = subparsers.add_parser("report", help="Show a run report.")
     report_parser.add_argument("run_id", help="Run ID to report.")
+
+    critique_parser = subparsers.add_parser("critique", help="Show dynamic run critique.")
+    critique_parser.add_argument("run_id", help="Run ID to critique.")
 
     resume_parser = subparsers.add_parser("resume", help="Reserved resume entry point.")
     resume_parser.add_argument("run_id", help="Run ID to resume.")
@@ -77,6 +81,10 @@ def main(argv: list[str] | None = None) -> None:
         show_report(args.store, args.project, args.run_id)
         return
 
+    if args.command == "critique":
+        show_critique(args.store, args.project, args.run_id)
+        return
+
     if args.command == "resume":
         reserve_resume(args.store, args.project, args.run_id)
         return
@@ -97,7 +105,7 @@ def configure_stdio() -> None:
 
 def normalize_argv(argv: list[str] | None) -> list[str]:
     raw_args = list(sys.argv[1:] if argv is None else argv)
-    commands = {"run", "inspect", "report", "resume", "tool"}
+    commands = {"run", "inspect", "report", "critique", "resume", "tool"}
     options_with_values = {"--store", "--project"}
     skip_next = False
     for index, value in enumerate(raw_args):
@@ -156,6 +164,11 @@ def inspect_runs(store: str, project: str, run_id: str | None) -> None:
 
 def show_report(store: str, project: str, run_id: str) -> None:
     sys.stdout.write(RunStore(store, project_path=project).read_report(run_id))
+
+
+def show_critique(store: str, project: str, run_id: str) -> None:
+    events = RunStore(store, project_path=project).read_events(run_id)
+    sys.stdout.write(render_critique(events) + "\n")
 
 
 def reserve_resume(store: str, project: str, run_id: str) -> None:

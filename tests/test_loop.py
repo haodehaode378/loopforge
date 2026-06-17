@@ -22,7 +22,6 @@ class RunLoopTests(unittest.TestCase):
             "observe",
             "adjust",
             "verify",
-            "critique",
             "report",
         ])
 

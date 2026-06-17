@@ -1,6 +1,7 @@
 """Minimal agent loop package."""
 
 from ai_agent_loop.agent import Agent
+from ai_agent_loop.critique import build_critique, render_critique
 from ai_agent_loop.goal import Goal
 from ai_agent_loop.loop import AgentStep, LoopResult, run_loop
 from ai_agent_loop.policy import PolicyDecision
@@ -11,6 +12,7 @@ from ai_agent_loop.store import RunStore, render_report
 __all__ = [
     "Agent",
     "AgentStep",
+    "build_critique",
     "Goal",
     "LoopResult",
     "PolicyDecision",
@@ -19,5 +21,6 @@ __all__ = [
     "RiskAssessment",
     "RunStore",
     "render_report",
+    "render_critique",
     "run_loop",
 ]

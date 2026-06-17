@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 from ai_agent_loop.goal import Goal
+from ai_agent_loop.critique import render_critique
 from ai_agent_loop.loop import AgentStep, LoopResult
 from ai_agent_loop.project import Project, ProjectRegistry
 
@@ -87,6 +88,7 @@ class RunStore:
         events = self.read_events(run_id)
         effective_status = infer_status(events)
         report = replace_status_line(report, effective_status)
+        report = replace_sharp_review(report, render_critique(events))
         blocked_reason = find_blocked_reason(events)
         if blocked_reason and "## Blocked Reason" not in report:
             report += f"\n## Blocked Reason\n\n{blocked_reason}\n"
@@ -149,9 +151,7 @@ def render_report(result: LoopResult) -> str:
     steps = "\n".join(
         f"- {step.name}: {step.detail}" for step in result.steps
     )
-    critique = "\n".join(
-        f"- {step.detail}" for step in result.steps if step.name == "critique"
-    )
+    critique = render_critique([step.to_dict() for step in result.steps])
 
     return (
         f"# Agent Run {result.run_id}\n\n"
@@ -202,3 +202,13 @@ def replace_status_line(report: str, status: str) -> str:
             lines[index] = f"Status: {status}"
             return "\n".join(lines) + ("\n" if report.endswith("\n") else "")
     return report
+
+
+def replace_sharp_review(report: str, critique: str) -> str:
+    heading = "## Sharp Review"
+    next_heading = "\n## Loop Trace"
+    if heading not in report or next_heading not in report:
+        return report
+    before, rest = report.split(heading, 1)
+    _, after = rest.split(next_heading, 1)
+    return f"{before}{heading}\n\n{critique}\n{next_heading}{after}"
