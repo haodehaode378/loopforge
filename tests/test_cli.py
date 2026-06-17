@@ -58,6 +58,26 @@ class CliArgTests(unittest.TestCase):
         self.assertEqual(args.test_command, "python -m unittest")
         self.assertEqual(args.goal, "Ship")
 
+    def test_git_tool_commit_parses_message(self) -> None:
+        args = build_parser().parse_args(
+            normalize_argv(["tool", "git", "commit", "Save work"])
+        )
+
+        self.assertEqual(args.command, "tool")
+        self.assertEqual(args.tool_command, "git")
+        self.assertEqual(args.git_command, "commit")
+        self.assertEqual(args.message, "Save work")
+
+    def test_git_tool_push_parses_target(self) -> None:
+        args = build_parser().parse_args(
+            normalize_argv(["tool", "git", "push", "origin", "feature"])
+        )
+
+        self.assertEqual(args.tool_command, "git")
+        self.assertEqual(args.git_command, "push")
+        self.assertEqual(args.remote, "origin")
+        self.assertEqual(args.branch, "feature")
+
     def test_resume_command_is_reserved(self) -> None:
         args = build_parser().parse_args(normalize_argv(["resume", "run-1"]))
 

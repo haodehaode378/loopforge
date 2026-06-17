@@ -90,6 +90,7 @@ class RunStore:
         effective_status = infer_status(events)
         report = replace_status_line(report, effective_status)
         report = replace_automation_summary(report, render_automation_summary(events))
+        report = replace_git_summary(report, render_git_summary(events))
         report = replace_sharp_review(report, render_critique(events))
         blocked_reason = find_blocked_reason(events)
         if blocked_reason and "## Blocked Reason" not in report:
@@ -167,6 +168,7 @@ def render_report(result: LoopResult) -> str:
         f"## Assumptions\n\n{assumptions}\n\n"
         f"## Success Criteria\n\n{criteria}\n\n"
         f"## Automation Summary\n\nNo autonomous actions recorded.\n\n"
+        f"## Git Summary\n\nNo git actions recorded.\n\n"
         f"## Sharp Review\n\n{critique}\n\n"
         f"## Loop Trace\n\n{steps}\n"
     )
@@ -254,6 +256,89 @@ def render_event_risks(events: list[dict[str, object]]) -> str:
     return "\n".join(lines)
 
 
+def render_git_summary(events: list[dict[str, object]]) -> str:
+    git_events = [
+        event for event in events
+        if str(event.get("name", "")).startswith("git.")
+    ]
+    if not git_events:
+        return "No git actions recorded."
+
+    commits = [event for event in git_events if event.get("name") == "git.commit"]
+    pushes = [event for event in git_events if event.get("name") == "git.push.blocked"]
+    return "\n\n".join(
+        [
+            "Commit SHA:\n" + render_git_commits(commits),
+            "Branch:\n" + render_git_branches(git_events),
+            "Remote target:\n" + render_git_remote_targets(pushes),
+            "Changed files:\n" + render_git_changed_files(git_events),
+            "Commands:\n" + render_git_commands(git_events),
+            "Risk decision:\n" + render_git_risk_decisions(git_events),
+        ]
+    )
+
+
+def render_git_commits(events: list[dict[str, object]]) -> str:
+    if not events:
+        return "- none"
+    return "\n".join(f"- {event.get('metadata', {}).get('commit_sha') or 'none'}" for event in events)
+
+
+def render_git_branches(events: list[dict[str, object]]) -> str:
+    branches = [
+        str(event.get("metadata", {}).get("branch"))
+        for event in events
+        if event.get("metadata", {}).get("branch")
+    ]
+    if not branches:
+        return "- unknown"
+    return "\n".join(f"- {branch}" for branch in sorted(set(branches)))
+
+
+def render_git_remote_targets(events: list[dict[str, object]]) -> str:
+    targets = [
+        str(event.get("metadata", {}).get("remote_target"))
+        for event in events
+        if event.get("metadata", {}).get("remote_target")
+    ]
+    if not targets:
+        return "- none"
+    return "\n".join(f"- {target}" for target in targets)
+
+
+def render_git_changed_files(events: list[dict[str, object]]) -> str:
+    files: list[str] = []
+    for event in events:
+        changed = event.get("metadata", {}).get("changed_files", [])
+        if isinstance(changed, list):
+            files.extend(str(item) for item in changed)
+    if not files:
+        return "- none"
+    return "\n".join(f"- {path}" for path in sorted(set(files)))
+
+
+def render_git_commands(events: list[dict[str, object]]) -> str:
+    commands = [
+        str(event.get("metadata", {}).get("command"))
+        for event in events
+        if event.get("metadata", {}).get("command")
+    ]
+    if not commands:
+        return "- none"
+    return "\n".join(f"- {command}" for command in commands)
+
+
+def render_git_risk_decisions(events: list[dict[str, object]]) -> str:
+    lines = []
+    for event in events:
+        risk = event.get("risk", {})
+        lines.append(
+            f"- {event.get('name')}: {event.get('status')} - "
+            f"{risk.get('level')} - {event.get('detail')}"
+        )
+    return "\n".join(lines) if lines else "- none"
+
+
 def infer_status(events: list[dict[str, object]]) -> str:
     statuses = {str(event.get("status", "")) for event in events}
     if "blocked" in statuses:
@@ -299,6 +384,16 @@ def replace_sharp_review(report: str, critique: str) -> str:
 
 def replace_automation_summary(report: str, summary: str) -> str:
     heading = "## Automation Summary"
+    next_heading = "\n## Git Summary"
+    if heading not in report or next_heading not in report:
+        return report
+    before, rest = report.split(heading, 1)
+    _, after = rest.split(next_heading, 1)
+    return f"{before}{heading}\n\n{summary}\n\n{next_heading}{after}"
+
+
+def replace_git_summary(report: str, summary: str) -> str:
+    heading = "## Git Summary"
     next_heading = "\n## Sharp Review"
     if heading not in report or next_heading not in report:
         return report

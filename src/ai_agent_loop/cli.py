@@ -8,7 +8,7 @@ import sys
 from ai_agent_loop.agent import Agent
 from ai_agent_loop.critique import render_critique
 from ai_agent_loop.store import RunStore
-from ai_agent_loop.tools import FileTools, ShellTools
+from ai_agent_loop.tools import FileTools, GitTools, ShellTools
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -77,6 +77,19 @@ def build_parser() -> argparse.ArgumentParser:
     shell_parser = tool_subparsers.add_parser("shell", help="Run a shell command.")
     shell_parser.add_argument("shell_command", help="Command to run.")
     shell_parser.add_argument("--timeout", type=int, default=60)
+
+    git_parser = tool_subparsers.add_parser("git", help="Run a recorded git tool.")
+    git_subparsers = git_parser.add_subparsers(dest="git_command", required=True)
+
+    git_subparsers.add_parser("status", help="Record git status.")
+    git_subparsers.add_parser("diff", help="Record git diff.")
+
+    commit_parser = git_subparsers.add_parser("commit", help="Create a gated git commit.")
+    commit_parser.add_argument("message", help="Commit message.")
+
+    push_parser = git_subparsers.add_parser("push", help="Record blocked git push risk.")
+    push_parser.add_argument("remote", nargs="?", default="origin")
+    push_parser.add_argument("branch", nargs="?", default="")
 
     return parser
 
@@ -239,6 +252,8 @@ def run_tool(args: argparse.Namespace) -> None:
         sys.stdout.write(result.stdout)
         sys.stderr.write(result.stderr)
         print(f"exit_code: {result.exit_code}")
+    elif args.tool_command == "git":
+        run_git_tool(args, store, run_id)
     else:
         raise ValueError(f"unknown tool command: {args.tool_command}")
 
@@ -249,6 +264,27 @@ def create_tool_run(store: str, project: str) -> str:
     agent = Agent(store_root=store, project_path=project)
     result = agent.run("Recorded tool call", persist=True)
     return result.run_id
+
+
+def run_git_tool(args: argparse.Namespace, store: RunStore, run_id: str) -> None:
+    tools = GitTools(store, run_id)
+    if args.git_command == "status":
+        result = tools.status()
+    elif args.git_command == "diff":
+        result = tools.diff()
+    elif args.git_command == "commit":
+        result = tools.commit(args.message)
+    elif args.git_command == "push":
+        result = tools.push(args.remote, args.branch)
+    else:
+        raise ValueError(f"unknown git command: {args.git_command}")
+
+    sys.stdout.write(result.stdout)
+    sys.stderr.write(result.stderr)
+    print(f"exit_code: {result.exit_code}")
+    print(f"branch: {result.branch}")
+    if result.commit_sha:
+        print(f"commit_sha: {result.commit_sha}")
 
 
 def print_summary(summary: dict[str, object]) -> None:

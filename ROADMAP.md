@@ -118,7 +118,7 @@ Done means:
 - High-risk actions pause instead of executing blindly.
 - Three repeated failures produce a blocked run with evidence.
 - Every run ends as `done`, `failed`, `blocked`, or `cancelled`.
-- Real project writes, commit, push, and delete remain disabled until later policy loops.
+- Real project writes, git push, and delete remain disabled until later policy loops; git commit is gated by branch policy.
 
 If not done:
 

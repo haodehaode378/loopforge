@@ -236,15 +236,15 @@ Goal: let automation publish code when policy allows.
 Must complete:
 
 - Commit tool.
-- Push tool.
+- Push risk interface without execution.
 - Branch policy.
 - Protected/default branch detection where possible.
 - Report includes commit SHA and remote target.
 
 Verification:
 
-- Tests use a local bare Git remote.
-- Push requires policy approval when risky.
+- Tests use a local Git repository.
+- Push records a blocked policy decision and remote target.
 - Commit message and diff are recorded.
 
 If incomplete:

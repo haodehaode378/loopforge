@@ -161,8 +161,8 @@ Tool classes:
 - Fixture-only autonomous file write.
 - File delete. Risk interface only for now.
 - Shell command.
-- Git diff. Planned.
-- Git commit. Planned.
+- Git status and diff.
+- Git commit, allowed only on non-default branches or fixture projects.
 - Git push. Risk interface only for now.
 - Test runner. Planned.
 - Report generator.
@@ -185,6 +185,10 @@ Current policy behavior:
 
 - `loopforge run --auto` can read context, write one fixture-scoped file, run verification, adjust once, and report the result.
 - Autonomous writes require a `.loopforge-fixture` marker in the project root.
+- Git status and diff are recorded as read-only events.
+- Git commit is blocked on default branches unless the project is a marked fixture.
+- Git commit excludes `.agent`, `AGENTS.md`, and `docs/loop-spec.md` from automatic staging.
+- Git push is never executed in the current loop; it records a blocked risk decision.
 - High-risk shell commands are blocked before execution.
 - Three consecutive failed shell executions append a blocked event.
 - `inspect` and `report` show the blocked reason.

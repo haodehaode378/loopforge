@@ -89,6 +89,10 @@ Run recorded tool calls:
 loopforge --project E:\path\to\project tool read README.md
 loopforge --project E:\path\to\project tool search *.py
 loopforge --project E:\path\to\project tool shell "python -m unittest discover -s tests"
+loopforge --project E:\path\to\project tool git status
+loopforge --project E:\path\to\project tool git diff
+loopforge --project E:\path\to\project tool git commit "Save bounded work"
+loopforge --project E:\path\to\project tool git push origin main
 ```
 
 Use a specific project:
@@ -123,5 +127,6 @@ python -m unittest discover -s tests
 ## Next Steps
 
 - Expand autonomous writes beyond fixture projects with explicit policy approvals.
+- Add policy approvals for git push instead of only recording blocked push risk.
 - Implement real provider adapters behind the provider interface.
 - Add a desktop/web UI for run timelines, approvals, diffs, and verification output.
