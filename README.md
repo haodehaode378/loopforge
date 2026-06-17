@@ -36,6 +36,7 @@ It will focus on:
 |       +-- cli.py
 |       +-- goal.py
 |       +-- loop.py
+|       +-- multi_agent.py
 |       +-- provider.py
 |       +-- project.py
 |       +-- settings.py
@@ -118,6 +119,14 @@ loopforge --project E:\path\to\fixture run --auto "Implement one fixture change"
 
 Autonomous writes currently require a `.loopforge-fixture` marker in the project root.
 
+Run read-only multi-agent analysis:
+
+```powershell
+loopforge --project E:\path\to\project multi "Assess project readiness"
+```
+
+Multi-agent children are currently read-only and cannot write, commit, push, or delete.
+
 Run tests:
 
 ```powershell
@@ -128,5 +137,6 @@ python -m unittest discover -s tests
 
 - Expand autonomous writes beyond fixture projects with explicit policy approvals.
 - Add policy approvals for git push instead of only recording blocked push risk.
+- Expand multi-agent coordination from read-only summaries to approved write scopes.
 - Implement real provider adapters behind the provider interface.
 - Add a desktop/web UI for run timelines, approvals, diffs, and verification output.

@@ -26,6 +26,7 @@ src/ai_agent_loop/
 +-- critique.py Dynamic run critique
 +-- goal.py     Goal model
 +-- loop.py     Loop primitives
++-- multi_agent.py Read-only parent/child run orchestration
 +-- provider.py Provider protocol and deterministic fake provider
 +-- project.py  Project registry and metadata
 +-- settings.py Project settings models without secret persistence
@@ -206,17 +207,18 @@ High-risk examples:
 
 ## Multi-Agent Coordination
 
-Subagents should be generated dynamically from the goal. They can run in parallel when their scopes do not overlap.
+Subagents should be generated dynamically from the goal. The current implementation supports read-only child analysis runs and a reviewer child run.
 
 The parent run owns:
 
 - Child run creation.
-- Shared context.
-- Conflict detection.
-- Reviewer decision requests.
+- Parent/child run metadata.
+- Read-only context gathering.
+- Conflict detection placeholder.
+- Reviewer summary requests.
 - Merged report generation.
 
-If child runs edit the same file, a reviewer agent decides the merge strategy and records the decision. If reviewer resolution fails, the parent run becomes `blocked`.
+Child runs cannot write files, commit, push, or delete in the current implementation. If later child runs edit the same file, a reviewer agent must decide the merge strategy and record the decision before merge.
 
 ## Privacy Boundary
 

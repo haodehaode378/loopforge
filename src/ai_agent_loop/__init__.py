@@ -5,6 +5,7 @@ from ai_agent_loop.autonomous import AutonomousRunner
 from ai_agent_loop.critique import build_critique, render_critique
 from ai_agent_loop.goal import Goal
 from ai_agent_loop.loop import AgentStep, LoopResult, run_loop
+from ai_agent_loop.multi_agent import MultiAgentResult, MultiAgentRunner
 from ai_agent_loop.policy import PolicyDecision
 from ai_agent_loop.provider import DeterministicFakeProvider, resolve_provider
 from ai_agent_loop.project import Project, ProjectRegistry
@@ -22,6 +23,8 @@ __all__ = [
     "load_settings",
     "LoopResult",
     "LoopSettings",
+    "MultiAgentResult",
+    "MultiAgentRunner",
     "PolicyDecision",
     "Project",
     "ProjectRegistry",

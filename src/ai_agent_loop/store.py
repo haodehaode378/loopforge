@@ -71,6 +71,18 @@ class RunStore:
             "report_path": str(run_dir / "report.md"),
         }
 
+    def update_goal_metadata(self, run_id: str, metadata: dict[str, object]) -> None:
+        goal_path = self.run_dir(run_id) / "goal.json"
+        if not goal_path.exists():
+            raise ValueError(f"run not found: {run_id}")
+        goal_record = json.loads(goal_path.read_text(encoding="utf-8"))
+        current = goal_record.get("metadata", {})
+        if not isinstance(current, dict):
+            current = {}
+        current.update(metadata)
+        goal_record["metadata"] = current
+        self._write_json(goal_path, goal_record)
+
     def read_events(self, run_id: str) -> list[dict[str, object]]:
         events_path = self.run_dir(run_id) / "events.jsonl"
         if not events_path.exists():
@@ -91,6 +103,7 @@ class RunStore:
         report = replace_status_line(report, effective_status)
         report = replace_automation_summary(report, render_automation_summary(events))
         report = replace_git_summary(report, render_git_summary(events))
+        report = replace_multi_agent_summary(report, render_multi_agent_summary(events))
         report = replace_sharp_review(report, render_critique(events))
         blocked_reason = find_blocked_reason(events)
         if blocked_reason and "## Blocked Reason" not in report:
@@ -169,6 +182,7 @@ def render_report(result: LoopResult) -> str:
         f"## Success Criteria\n\n{criteria}\n\n"
         f"## Automation Summary\n\nNo autonomous actions recorded.\n\n"
         f"## Git Summary\n\nNo git actions recorded.\n\n"
+        f"## Multi-Agent Summary\n\nNo multi-agent coordination recorded.\n\n"
         f"## Sharp Review\n\n{critique}\n\n"
         f"## Loop Trace\n\n{steps}\n"
     )
@@ -339,6 +353,37 @@ def render_git_risk_decisions(events: list[dict[str, object]]) -> str:
     return "\n".join(lines) if lines else "- none"
 
 
+def render_multi_agent_summary(events: list[dict[str, object]]) -> str:
+    child_events = [event for event in events if event.get("name") == "multi.child_created"]
+    reviewer_events = [event for event in events if event.get("name") == "multi.reviewer_decision"]
+    conflict_events = [event for event in events if event.get("name") == "multi.conflict_detection"]
+    merged_events = [event for event in events if event.get("name") == "multi.merged_summary"]
+    if not child_events and not reviewer_events:
+        return "No multi-agent coordination recorded."
+
+    return "\n\n".join(
+        [
+            "Child runs:\n" + render_child_runs(child_events),
+            "Conflict detection:\n" + render_event_details(conflict_events),
+            "Reviewer decision:\n" + render_event_details(reviewer_events),
+            "Merged summary:\n" + render_event_details(merged_events),
+        ]
+    )
+
+
+def render_child_runs(events: list[dict[str, object]]) -> str:
+    if not events:
+        return "- none"
+    lines = []
+    for event in events:
+        metadata = event.get("metadata", {})
+        lines.append(
+            f"- {metadata.get('role')}: {metadata.get('child_run_id')} "
+            f"({metadata.get('goal')})"
+        )
+    return "\n".join(lines)
+
+
 def infer_status(events: list[dict[str, object]]) -> str:
     statuses = {str(event.get("status", "")) for event in events}
     if "blocked" in statuses:
@@ -394,6 +439,16 @@ def replace_automation_summary(report: str, summary: str) -> str:
 
 def replace_git_summary(report: str, summary: str) -> str:
     heading = "## Git Summary"
+    next_heading = "\n## Multi-Agent Summary"
+    if heading not in report or next_heading not in report:
+        return report
+    before, rest = report.split(heading, 1)
+    _, after = rest.split(next_heading, 1)
+    return f"{before}{heading}\n\n{summary}\n\n{next_heading}{after}"
+
+
+def replace_multi_agent_summary(report: str, summary: str) -> str:
+    heading = "## Multi-Agent Summary"
     next_heading = "\n## Sharp Review"
     if heading not in report or next_heading not in report:
         return report

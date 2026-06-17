@@ -259,17 +259,18 @@ Goal: split larger work into dynamically generated child runs.
 Must complete:
 
 - Parent run creates child goals.
-- Child runs execute in parallel when scopes do not overlap.
-- Shared handoff context exists.
-- Overlapping file edits are detected.
-- Reviewer agent decides merge strategy.
+- Child runs perform read-only analysis only.
+- Parent and child runs record `parent_run_id` and `child_run_ids`.
+- Conflict detection placeholder exists.
+- Reviewer child run summarizes child results.
 - Parent report summarizes child results.
 
 Verification:
 
 - Tests create parent and child runs.
-- Simulated conflict triggers reviewer decision.
-- Reviewer failure blocks parent run.
+- Tests assert child runs have independent reports and artifacts.
+- Tests assert child runs do not write files, commit, push, delete, or run shell commands.
+- Parent report includes child runs, conflict detection, reviewer decision, and merged summary.
 
 If incomplete:
 

@@ -131,17 +131,18 @@ Goal: coordinate dynamically generated subagents.
 
 - Add parent/child run IDs.
 - Generate roles from the goal instead of requiring a fixed role list.
-- Support parallel child runs when their file/tool scopes do not conflict.
-- Add shared context handoff files.
-- Add conflict detection for overlapping file edits.
-- Let a reviewer agent decide merge strategy for conflicting child outputs.
-- Add merged report output.
+- Support read-only child analysis runs.
+- Add child summary artifacts.
+- Add conflict detection placeholder for future write scopes.
+- Let a reviewer child summarize child outputs.
+- Add merged parent report output.
 
 Done means:
 
 - A parent run can spawn multiple child runs.
 - Each child run has its own goal, artifacts, and report.
-- Conflicts are detected before merge.
+- Child runs record parent_run_id and stay read-only.
+- Parent reports show child runs, conflict detection, reviewer decision, and merged summary.
 - Reviewer decisions are recorded as events.
 
 If not done:

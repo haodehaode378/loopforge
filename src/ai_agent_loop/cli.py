@@ -7,6 +7,7 @@ import sys
 
 from ai_agent_loop.agent import Agent
 from ai_agent_loop.critique import render_critique
+from ai_agent_loop.multi_agent import MultiAgentRunner
 from ai_agent_loop.store import RunStore
 from ai_agent_loop.tools import FileTools, GitTools, ShellTools
 
@@ -56,6 +57,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     critique_parser = subparsers.add_parser("critique", help="Show dynamic run critique.")
     critique_parser.add_argument("run_id", help="Run ID to critique.")
+
+    multi_parser = subparsers.add_parser("multi", help="Run read-only multi-agent analysis.")
+    multi_parser.add_argument("goal", help="Goal for the multi-agent run.")
 
     resume_parser = subparsers.add_parser("resume", help="Reserved resume entry point.")
     resume_parser.add_argument("run_id", help="Run ID to resume.")
@@ -121,6 +125,10 @@ def main(argv: list[str] | None = None) -> None:
         show_critique(args.store, args.project, args.run_id)
         return
 
+    if args.command == "multi":
+        run_multi(args.goal, args.store, args.project)
+        return
+
     if args.command == "resume":
         reserve_resume(args.store, args.project, args.run_id)
         return
@@ -141,7 +149,7 @@ def configure_stdio() -> None:
 
 def normalize_argv(argv: list[str] | None) -> list[str]:
     raw_args = list(sys.argv[1:] if argv is None else argv)
-    commands = {"run", "inspect", "report", "critique", "resume", "tool"}
+    commands = {"run", "inspect", "report", "critique", "multi", "resume", "tool"}
     options_with_values = {"--store", "--project"}
     skip_next = False
     for index, value in enumerate(raw_args):
@@ -225,6 +233,13 @@ def show_report(store: str, project: str, run_id: str) -> None:
 def show_critique(store: str, project: str, run_id: str) -> None:
     events = RunStore(store, project_path=project).read_events(run_id)
     sys.stdout.write(render_critique(events) + "\n")
+
+
+def run_multi(goal: str, store: str, project: str) -> None:
+    result = MultiAgentRunner(store_root=store, project_path=project).run(goal)
+    print(f"parent_run_id: {result.parent_run_id}")
+    print(f"child_run_ids: {', '.join(result.child_run_ids)}")
+    print(f"reviewer_run_id: {result.reviewer_run_id}")
 
 
 def reserve_resume(store: str, project: str, run_id: str) -> None:
