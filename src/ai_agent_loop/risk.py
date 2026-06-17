@@ -30,6 +30,14 @@ def classify_file_search(pattern: str) -> RiskAssessment:
     return RiskAssessment("low", f"Read-only file search: {pattern}")
 
 
+def classify_file_write(path: str) -> RiskAssessment:
+    return RiskAssessment(
+        "medium",
+        f"File write can change project state: {path}",
+        requires_confirmation=False,
+    )
+
+
 def classify_shell_command(command: str) -> RiskAssessment:
     lowered = command.lower()
     dangerous_tokens = [

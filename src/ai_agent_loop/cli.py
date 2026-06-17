@@ -37,6 +37,16 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Block the run if no model provider is configured.",
     )
+    run_parser.add_argument(
+        "--auto",
+        action="store_true",
+        help="Run the bounded autonomous development loop.",
+    )
+    run_parser.add_argument(
+        "--test-command",
+        default="",
+        help="Verification command for --auto runs.",
+    )
 
     inspect_parser = subparsers.add_parser("inspect", help="List or show runs.")
     inspect_parser.add_argument("run_id", nargs="?", help="Run ID to inspect.")
@@ -81,6 +91,8 @@ def main(argv: list[str] | None = None) -> None:
             args.project,
             persist=not args.no_persist,
             require_model=args.require_model,
+            auto=args.auto,
+            test_command=args.test_command,
         )
         return
 
@@ -140,9 +152,17 @@ def run_goal(
     project: str,
     persist: bool,
     require_model: bool = False,
+    auto: bool = False,
+    test_command: str = "",
 ) -> None:
     agent = Agent(store_root=store, project_path=project)
-    result = agent.run(goal, persist=persist, require_model=require_model)
+    result = agent.run(
+        goal,
+        persist=persist,
+        require_model=require_model,
+        auto=auto,
+        test_command=test_command,
+    )
     for step in result.steps:
         print(f"{step.name} [{step.status}]: {step.detail}")
 

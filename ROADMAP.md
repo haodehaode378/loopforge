@@ -103,8 +103,8 @@ If not done:
 
 Goal: allow full autonomous execution for developer tasks.
 
-- Add `loopforge run --auto`.
-- Add bounded step limits.
+- Add `loopforge run --auto` for fixture-scoped autonomous runs.
+- Add bounded step limits: one file target, one verification command, one retry.
 - Add command allow/deny policies.
 - Add retry and adjustment records.
 - Add verification gates.
@@ -114,10 +114,11 @@ Goal: allow full autonomous execution for developer tasks.
 
 Done means:
 
-- Full automation can read, write, run shell, commit, push, and delete within policy.
+- Minimal automation can read context, write fixture files, run shell verification, adjust once, and report evidence.
 - High-risk actions pause instead of executing blindly.
 - Three repeated failures produce a blocked run with evidence.
 - Every run ends as `done`, `failed`, `blocked`, or `cancelled`.
+- Real project writes, commit, push, and delete remain disabled until later policy loops.
 
 If not done:
 

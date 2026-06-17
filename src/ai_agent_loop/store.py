@@ -89,6 +89,7 @@ class RunStore:
         events = self.read_events(run_id)
         effective_status = infer_status(events)
         report = replace_status_line(report, effective_status)
+        report = replace_automation_summary(report, render_automation_summary(events))
         report = replace_sharp_review(report, render_critique(events))
         blocked_reason = find_blocked_reason(events)
         if blocked_reason and "## Blocked Reason" not in report:
@@ -165,6 +166,7 @@ def render_report(result: LoopResult) -> str:
         f"## Goal\n\n{result.goal.description}\n\n"
         f"## Assumptions\n\n{assumptions}\n\n"
         f"## Success Criteria\n\n{criteria}\n\n"
+        f"## Automation Summary\n\nNo autonomous actions recorded.\n\n"
         f"## Sharp Review\n\n{critique}\n\n"
         f"## Loop Trace\n\n{steps}\n"
     )
@@ -196,10 +198,72 @@ def render_metadata(metadata: dict[str, object]) -> str:
     return "\n".join(f"- {key}: {metadata.get(key)}" for key in keys)
 
 
+def render_automation_summary(events: list[dict[str, object]]) -> str:
+    writes = [event for event in events if event.get("name") == "file.write"]
+    commands = [event for event in events if event.get("name") == "shell.run"]
+    verifications = [event for event in events if event.get("name") == "automation.verify"]
+    next_steps = [event for event in events if event.get("name") == "automation.next_steps"]
+    risk_events = [event for event in events if event.get("risk")]
+    if not writes and not commands and not verifications:
+        return "No autonomous actions recorded."
+
+    return "\n\n".join(
+        [
+            "Changed files:\n" + render_event_paths(writes),
+            "Commands:\n" + render_event_commands(commands),
+            "Verification:\n" + render_event_details(verifications),
+            "Risks:\n" + render_event_risks(risk_events),
+            "Next steps:\n" + render_event_details(next_steps),
+        ]
+    )
+
+
+def render_event_paths(events: list[dict[str, object]]) -> str:
+    if not events:
+        return "- none"
+    lines = []
+    for event in events:
+        metadata = event.get("metadata", {})
+        lines.append(f"- {metadata.get('relative_path') or metadata.get('path')}")
+    return "\n".join(lines)
+
+
+def render_event_commands(events: list[dict[str, object]]) -> str:
+    if not events:
+        return "- none"
+    lines = []
+    for event in events:
+        metadata = event.get("metadata", {})
+        lines.append(f"- {metadata.get('command')} -> exit {metadata.get('exit_code')}")
+    return "\n".join(lines)
+
+
+def render_event_details(events: list[dict[str, object]]) -> str:
+    if not events:
+        return "- none"
+    return "\n".join(f"- {event.get('detail', '')}" for event in events)
+
+
+def render_event_risks(events: list[dict[str, object]]) -> str:
+    if not events:
+        return "- none"
+    lines = []
+    for event in events:
+        risk = event.get("risk", {})
+        lines.append(f"- {event.get('name')}: {risk.get('level')} - {risk.get('reason')}")
+    return "\n".join(lines)
+
+
 def infer_status(events: list[dict[str, object]]) -> str:
     statuses = {str(event.get("status", "")) for event in events}
     if "blocked" in statuses:
         return "blocked"
+    automation_verifications = [
+        event for event in events
+        if event.get("name") == "automation.verify"
+    ]
+    if automation_verifications:
+        return str(automation_verifications[-1].get("status", "unknown"))
     if "failed" in statuses:
         return "failed"
     if "cancelled" in statuses:
@@ -231,3 +295,13 @@ def replace_sharp_review(report: str, critique: str) -> str:
     before, rest = report.split(heading, 1)
     _, after = rest.split(next_heading, 1)
     return f"{before}{heading}\n\n{critique}\n{next_heading}{after}"
+
+
+def replace_automation_summary(report: str, summary: str) -> str:
+    heading = "## Automation Summary"
+    next_heading = "\n## Sharp Review"
+    if heading not in report or next_heading not in report:
+        return report
+    before, rest = report.split(heading, 1)
+    _, after = rest.split(next_heading, 1)
+    return f"{before}{heading}\n\n{summary}\n\n{next_heading}{after}"

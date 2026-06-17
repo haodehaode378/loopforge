@@ -22,11 +22,20 @@ def build_critique(events: list[dict[str, object]]) -> dict[str, str]:
     blocked_events = [event for event in events if event.get("status") == "blocked"]
     failed_events = [event for event in events if event.get("status") == "failed"]
     tool_events = [event for event in events if event.get("type") == "tool_call"]
+    automation_verifications = [
+        event for event in events
+        if event.get("name") == "automation.verify"
+    ]
 
     return {
         "Scope control": critique_scope(tool_events, high_risk_events),
         "Product alignment": critique_alignment(event_names, tool_events),
-        "Verification quality": critique_verification(event_names, statuses, failed_events),
+        "Verification quality": critique_verification(
+            event_names,
+            statuses,
+            failed_events,
+            automation_verifications,
+        ),
         "Risk review": critique_risk(high_risk_events, blocked_events),
         "Next action": critique_next_action(blocked_events, failed_events, tool_events),
     }
@@ -66,9 +75,14 @@ def critique_verification(
     event_names: list[str],
     statuses: list[str],
     failed_events: list[dict[str, object]],
+    automation_verifications: list[dict[str, object]],
 ) -> str:
     if "blocked" in statuses:
         return "Verification is incomplete because the run is blocked and needs a decision before success can be claimed."
+    if automation_verifications and automation_verifications[-1].get("status") == "done":
+        if failed_events:
+            return "Verification recovered after adjustment; the final automation check passed."
+        return "Verification passed through the autonomous run check."
     if failed_events:
         return f"Verification found {len(failed_events)} failed event(s); the run should not be treated as complete."
     if "verify" in event_names:

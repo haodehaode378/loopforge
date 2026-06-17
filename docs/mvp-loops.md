@@ -213,6 +213,7 @@ Must complete:
 - Agent can run tests.
 - Agent can adjust after a failed check.
 - Agent can write a final report.
+- Real project writes remain blocked unless the project is a marked fixture.
 
 Verification:
 
@@ -220,6 +221,7 @@ Verification:
 - Assert files changed.
 - Assert tests pass after the run.
 - Assert report includes changed files, commands, verification, risks, next steps, time, tokens, and cost when available.
+- Assert non-fixture auto writes become blocked.
 
 If incomplete:
 

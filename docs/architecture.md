@@ -21,6 +21,7 @@ Project Store + Run Store
 ```text
 src/ai_agent_loop/
 +-- agent.py    Agent facade
++-- autonomous.py Bounded fixture-only autonomous runner
 +-- cli.py      CLI entry point
 +-- critique.py Dynamic run critique
 +-- goal.py     Goal model
@@ -157,7 +158,7 @@ Tool classes:
 
 - File read.
 - File search.
-- File edit. Planned.
+- Fixture-only autonomous file write.
 - File delete. Risk interface only for now.
 - Shell command.
 - Git diff. Planned.
@@ -182,6 +183,8 @@ Full automation is allowed, but must be bounded:
 
 Current policy behavior:
 
+- `loopforge run --auto` can read context, write one fixture-scoped file, run verification, adjust once, and report the result.
+- Autonomous writes require a `.loopforge-fixture` marker in the project root.
 - High-risk shell commands are blocked before execution.
 - Three consecutive failed shell executions append a blocked event.
 - `inspect` and `report` show the blocked reason.

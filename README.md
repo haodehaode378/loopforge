@@ -32,6 +32,7 @@ It will focus on:
 |   +-- ai_agent_loop/
 |       +-- __init__.py
 |       +-- agent.py
+|       +-- autonomous.py
 |       +-- cli.py
 |       +-- goal.py
 |       +-- loop.py
@@ -105,6 +106,14 @@ Require a configured model provider for a run:
 loopforge run --require-model "Draft an implementation plan"
 ```
 
+Run the bounded autonomous fixture loop:
+
+```powershell
+loopforge --project E:\path\to\fixture run --auto "Implement one fixture change"
+```
+
+Autonomous writes currently require a `.loopforge-fixture` marker in the project root.
+
 Run tests:
 
 ```powershell
@@ -113,6 +122,6 @@ python -m unittest discover -s tests
 
 ## Next Steps
 
-- Add tool adapters for files, shell, Git, and tests.
+- Expand autonomous writes beyond fixture projects with explicit policy approvals.
 - Implement real provider adapters behind the provider interface.
 - Add a desktop/web UI for run timelines, approvals, diffs, and verification output.

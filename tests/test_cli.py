@@ -48,6 +48,16 @@ class CliArgTests(unittest.TestCase):
         self.assertTrue(args.require_model)
         self.assertEqual(args.goal, "Ship")
 
+    def test_run_can_enable_auto_with_test_command(self) -> None:
+        args = build_parser().parse_args(
+            normalize_argv(["run", "--auto", "--test-command", "python -m unittest", "Ship"])
+        )
+
+        self.assertEqual(args.command, "run")
+        self.assertTrue(args.auto)
+        self.assertEqual(args.test_command, "python -m unittest")
+        self.assertEqual(args.goal, "Ship")
+
     def test_resume_command_is_reserved(self) -> None:
         args = build_parser().parse_args(normalize_argv(["resume", "run-1"]))
 

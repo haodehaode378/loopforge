@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from ai_agent_loop.autonomous import AutonomousRunner
 from ai_agent_loop.events import EventRecord
 from ai_agent_loop.loop import LoopResult, run_loop
 from ai_agent_loop.provider import resolve_provider
@@ -29,6 +30,8 @@ class Agent:
         goal: str,
         persist: bool = True,
         require_model: bool = False,
+        auto: bool = False,
+        test_command: str = "",
     ) -> LoopResult:
         settings = load_settings(self.registry.root, project=self.project)
         provider = resolve_provider(settings, require_model=require_model)
@@ -52,4 +55,6 @@ class Agent:
                         metadata=provider.metadata,
                     ).to_dict(),
                 )
+            elif auto:
+                AutonomousRunner(self.store, result.run_id).run(goal, test_command=test_command)
         return result
