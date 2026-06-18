@@ -105,6 +105,7 @@ class RunStore:
         report = replace_automation_summary(report, render_automation_summary(events))
         report = replace_git_summary(report, render_git_summary(events))
         report = replace_multi_agent_summary(report, render_multi_agent_summary(events))
+        report = replace_approval_readiness(report, render_approval_readiness(events))
         report = replace_sharp_review(report, render_critique(events))
         blocked_reason = find_blocked_reason(events)
         if blocked_reason and "## Blocked Reason" not in report:
@@ -184,6 +185,7 @@ def render_report(result: LoopResult) -> str:
         f"## Automation Summary\n\nNo autonomous actions recorded.\n\n"
         f"## Git Summary\n\nNo git actions recorded.\n\n"
         f"## Multi-Agent Summary\n\nNo multi-agent coordination recorded.\n\n"
+        f"## Approval Readiness\n\n{render_approval_readiness([step.to_dict() for step in result.steps])}\n\n"
         f"## Sharp Review\n\n{critique}\n\n"
         f"## Loop Trace\n\n{steps}\n"
     )
@@ -354,6 +356,51 @@ def render_git_risk_decisions(events: list[dict[str, object]]) -> str:
     return "\n".join(lines) if lines else "- none"
 
 
+def render_approval_readiness(events: list[dict[str, object]]) -> str:
+    changed_files = collect_changed_files(events)
+    risk_events = [event for event in events if event.get("risk") or event.get("status") == "blocked"]
+    diff_events = [
+        event for event in events
+        if event.get("name") == "git.diff"
+        or (
+            isinstance(event.get("artifacts"), dict)
+            and event.get("artifacts", {}).get("diff")
+        )
+    ]
+    return "\n\n".join(
+        [
+            "Mode:\n- read-only approval skeleton",
+            "Executable actions:\n- none",
+            "Reserved actions:\n- approve\n- resume\n- write\n- commit\n- push\n- delete",
+            "Changed files:\n" + render_changed_files(changed_files),
+            "Diff evidence:\n" + (f"- {len(diff_events)} diff artifact(s)" if diff_events else "- none"),
+            "Risk decisions:\n" + render_event_risks(risk_events),
+        ]
+    )
+
+
+def collect_changed_files(events: list[dict[str, object]]) -> list[str]:
+    files: list[str] = []
+    for event in events:
+        metadata = event.get("metadata", {})
+        if not isinstance(metadata, dict):
+            continue
+        changed = metadata.get("changed_files", [])
+        if isinstance(changed, list):
+            files.extend(str(item) for item in changed)
+        if event.get("name") == "file.write":
+            path = metadata.get("relative_path") or metadata.get("path")
+            if path:
+                files.append(str(path))
+    return sorted(set(files))
+
+
+def render_changed_files(files: list[str]) -> str:
+    if not files:
+        return "- none"
+    return "\n".join(f"- {path}" for path in files)
+
+
 def render_multi_agent_summary(events: list[dict[str, object]]) -> str:
     child_events = [event for event in events if event.get("name") == "multi.child_created"]
     reviewer_events = [event for event in events if event.get("name") == "multi.reviewer_decision"]
@@ -428,6 +475,8 @@ def ensure_summary_headings(report: str) -> str:
         additions.append("## Git Summary\n\nNo git actions recorded.\n")
     if "## Multi-Agent Summary" not in report:
         additions.append("## Multi-Agent Summary\n\nNo multi-agent coordination recorded.\n")
+    if "## Approval Readiness" not in report:
+        additions.append("## Approval Readiness\n\n" + render_approval_readiness([]) + "\n")
     if not additions:
         return report
     before, after = report.split("## Sharp Review", 1)
@@ -467,6 +516,16 @@ def replace_git_summary(report: str, summary: str) -> str:
 
 def replace_multi_agent_summary(report: str, summary: str) -> str:
     heading = "## Multi-Agent Summary"
+    next_heading = "\n## Approval Readiness"
+    if heading not in report or next_heading not in report:
+        return report
+    before, rest = report.split(heading, 1)
+    _, after = rest.split(next_heading, 1)
+    return f"{before}{heading}\n\n{summary}\n\n{next_heading}{after}"
+
+
+def replace_approval_readiness(report: str, summary: str) -> str:
+    heading = "## Approval Readiness"
     next_heading = "\n## Sharp Review"
     if heading not in report or next_heading not in report:
         return report

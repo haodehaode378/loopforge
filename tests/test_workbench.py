@@ -1,10 +1,11 @@
+import subprocess
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from ai_agent_loop import Agent, MultiAgentRunner, RunStore
 from ai_agent_loop.cli import build_parser, normalize_argv
-from ai_agent_loop.tools import ShellTools
+from ai_agent_loop.tools import GitTools, ShellTools
 from ai_agent_loop.workbench import build_workbench_snapshot, render_workbench_html
 
 
@@ -19,10 +20,18 @@ class WorkbenchTests(unittest.TestCase):
             tests_dir = project / "tests"
             tests_dir.mkdir()
             (tests_dir / "test_app.py").write_text("import unittest\n", encoding="utf-8")
+            subprocess.run(["git", "init"], cwd=project, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=project, check=True)
+            subprocess.run(["git", "config", "user.name", "LoopForge Test"], cwd=project, check=True)
+            subprocess.run(["git", "add", "."], cwd=project, check=True)
+            subprocess.run(["git", "commit", "-m", "initial"], cwd=project, check=True, capture_output=True)
             store_root = root / ".agent"
 
             done = Agent(store_root=store_root, project_path=project).run("Render workbench")
             ShellTools(RunStore(store_root, project_path=project), done.run_id).run("echo workbench-evidence")
+            (project / "app.py").write_text("print('changed')\n", encoding="utf-8")
+            diff_run = Agent(store_root=store_root, project_path=project).run("Review diff")
+            GitTools(RunStore(store_root, project_path=project), diff_run.run_id).diff()
             blocked = Agent(store_root=store_root, project_path=project).run("Blocked workbench")
             ShellTools(RunStore(store_root, project_path=project), blocked.run_id).run("git push origin main")
             multi = MultiAgentRunner(store_root=str(store_root), project_path=str(project)).run(
@@ -38,6 +47,7 @@ class WorkbenchTests(unittest.TestCase):
             project_data = snapshot["projects"][0]
             run_ids = {run["run_id"] for run in project_data["runs"]}
             self.assertIn(done.run_id, run_ids)
+            self.assertIn(diff_run.run_id, run_ids)
             self.assertIn(blocked.run_id, run_ids)
             self.assertIn(multi.parent_run_id, run_ids)
             self.assertGreaterEqual(project_data["analytics"]["status_counts"]["blocked"], 1)
@@ -52,6 +62,14 @@ class WorkbenchTests(unittest.TestCase):
             self.assertEqual(done_run["provider"]["provider"], "Deterministic Local")
             self.assertIn("workbench-evidence", done_run["command_outputs"][0]["stdout"]["content"])
 
+            diff_data = next(run for run in project_data["runs"] if run["run_id"] == diff_run.run_id)
+            self.assertIn("app.py", diff_data["changed_files"])
+            self.assertIn("print('changed')", diff_data["diff"]["content"])
+            self.assertTrue(diff_data["approval"]["ready_for_review"])
+            self.assertEqual(diff_data["approval"]["executable_actions"], [])
+            self.assertIn("Approval Readiness", diff_data["sections"])
+            self.assertTrue(diff_data["risk_decisions"])
+
             blocked_run = next(run for run in project_data["runs"] if run["run_id"] == blocked.run_id)
             self.assertEqual(blocked_run["effective_status"], "blocked")
             self.assertIn("Blocked Reason", blocked_run["sections"])
@@ -64,6 +82,12 @@ class WorkbenchTests(unittest.TestCase):
             self.assertIn("命令输出", html)
             self.assertIn("事件 JSON", html)
             self.assertIn("section 深链", html)
+            self.assertIn("审批骨架", html)
+            self.assertIn("变更文件", html)
+            self.assertIn("风险决策", html)
+            self.assertIn("Diff 查看器", html)
+            self.assertIn("disabled-action", html)
+            self.assertIn('"reserved_actions": ["approve", "resume", "write", "commit", "push", "delete"]', html)
             self.assertIn("Multi-Agent Summary", html)
             self.assertIn("Git Summary", html)
             self.assertIn("Automation Summary", html)

@@ -334,3 +334,29 @@ If incomplete:
 
 - Keep Loop 10 workbench behavior as the reliable baseline.
 - Mark missing sections clearly.
+
+## Loop 12: Diff Viewer And Approval Skeleton
+
+Goal: prepare the workbench for controlled agent changes without enabling write actions.
+
+Must complete:
+
+- Add diff viewer from existing `diff.patch` or git diff artifacts.
+- Add changed files panel from git and file events.
+- Add risk decision panel from recorded risk metadata.
+- Add disabled approval, resume, write, commit, push, and delete skeleton buttons.
+- Add Approval Readiness section to reports.
+- Keep all controls reserved only and non-executable.
+
+Verification:
+
+- Snapshot can read diff artifacts from the existing run store.
+- Workbench renders changed files, risk decisions, and diff content.
+- Approval buttons are disabled and have no execution handler.
+- Report includes Approval Readiness.
+- Browser smoke test captures the rendered workbench.
+
+If incomplete:
+
+- Keep Loop 11 evidence viewer as the reliable baseline.
+- Do not enable approve, resume, write, commit, push, or delete.

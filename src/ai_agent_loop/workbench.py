@@ -12,9 +12,11 @@ from ai_agent_loop.store import (
     find_blocked_reason,
     ensure_summary_headings,
     infer_status,
+    render_approval_readiness,
     render_automation_summary,
     render_git_summary,
     render_multi_agent_summary,
+    replace_approval_readiness,
     replace_automation_summary,
     replace_git_summary,
     replace_multi_agent_summary,
@@ -90,6 +92,9 @@ def read_run(run_dir: Path) -> dict[str, object]:
     if not isinstance(metadata, dict):
         metadata = {}
     provider = extract_provider_metrics(metadata)
+    changed_files = collect_changed_files(events)
+    risk_decisions = collect_risk_decisions(events)
+    diff = read_diff_preview(run_dir, events)
     return {
         "run_id": run_dir.name,
         "goal": goal_record.get("description", ""),
@@ -100,6 +105,10 @@ def read_run(run_dir: Path) -> dict[str, object]:
         "metadata": metadata,
         "provider": provider,
         "command_outputs": collect_command_outputs(events),
+        "changed_files": changed_files,
+        "risk_decisions": risk_decisions,
+        "diff": diff,
+        "approval": build_approval_readiness(changed_files, risk_decisions, diff),
         "parent_run_id": metadata.get("parent_run_id", ""),
         "child_run_ids": metadata.get("child_run_ids", []),
         "reviewer_run_id": metadata.get("reviewer_run_id", ""),
@@ -177,6 +186,76 @@ def collect_command_outputs(events: list[dict[str, object]]) -> list[dict[str, o
     return commands
 
 
+def collect_changed_files(events: list[dict[str, object]]) -> list[str]:
+    files: list[str] = []
+    for event in events:
+        metadata = event.get("metadata", {})
+        if not isinstance(metadata, dict):
+            continue
+        changed = metadata.get("changed_files", [])
+        if isinstance(changed, list):
+            files.extend(str(item) for item in changed)
+        if event.get("name") == "file.write":
+            path = metadata.get("relative_path") or metadata.get("path")
+            if path:
+                files.append(str(path))
+    return sorted(set(files))
+
+
+def collect_risk_decisions(events: list[dict[str, object]]) -> list[dict[str, object]]:
+    decisions = []
+    for event in events:
+        risk = event.get("risk", {})
+        if not risk and event.get("status") != "blocked":
+            continue
+        metadata = event.get("metadata", {})
+        if not isinstance(metadata, dict):
+            metadata = {}
+        if not isinstance(risk, dict):
+            risk = {}
+        decisions.append(
+            {
+                "name": event.get("name", ""),
+                "status": event.get("status", ""),
+                "level": risk.get("level", "unknown"),
+                "reason": risk.get("reason", event.get("detail", "")),
+                "detail": event.get("detail", ""),
+                "command": metadata.get("command", ""),
+            }
+        )
+    return decisions
+
+
+def read_diff_preview(run_dir: Path, events: list[dict[str, object]], limit: int = 12000) -> dict[str, object]:
+    candidates = [run_dir / "diff.patch", run_dir / "git" / "diff.patch"]
+    for event in events:
+        artifacts = event.get("artifacts", {})
+        if isinstance(artifacts, dict) and artifacts.get("diff"):
+            candidates.append(Path(str(artifacts["diff"])))
+    for candidate in candidates:
+        preview = read_artifact_preview(candidate, run_dir, limit=limit)
+        if not preview.get("missing"):
+            return preview
+    return {"path": "", "content": "", "truncated": False, "missing": True}
+
+
+def build_approval_readiness(
+    changed_files: list[str],
+    risk_decisions: list[dict[str, object]],
+    diff: dict[str, object],
+) -> dict[str, object]:
+    return {
+        "mode": "read-only approval skeleton",
+        "status": "reserved",
+        "executable_actions": [],
+        "reserved_actions": ["approve", "resume", "write", "commit", "push", "delete"],
+        "changed_file_count": len(changed_files),
+        "risk_decision_count": len(risk_decisions),
+        "has_diff": not bool(diff.get("missing", True)),
+        "ready_for_review": bool(changed_files or risk_decisions or not diff.get("missing", True)),
+    }
+
+
 def extract_provider_metrics(metadata: dict[str, object]) -> dict[str, object]:
     return {
         "provider": metadata.get("provider") or "unknown",
@@ -242,6 +321,7 @@ def read_dynamic_report(path: Path, events: list[dict[str, object]]) -> str:
     report = replace_automation_summary(report, render_automation_summary(events))
     report = replace_git_summary(report, render_git_summary(events))
     report = replace_multi_agent_summary(report, render_multi_agent_summary(events))
+    report = replace_approval_readiness(report, render_approval_readiness(events))
     report = replace_sharp_review(report, render_critique(events))
     blocked_reason = find_blocked_reason(events)
     if blocked_reason and "## Blocked Reason" not in report:
@@ -430,6 +510,36 @@ button, select, input { font: inherit; }
   padding: 10px;
   margin-bottom: 12px;
 }
+.approval-panel {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  padding: 10px;
+  margin: 12px 0;
+}
+.approval-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.disabled-action {
+  border: 1px solid var(--line);
+  background: #eef0eb;
+  color: var(--muted);
+  border-radius: 6px;
+  padding: 6px 9px;
+  cursor: not-allowed;
+}
+.file-list, .risk-list { display: grid; gap: 6px; margin: 8px 0; }
+.file-item, .risk-item {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 7px 8px;
+  background: #fbfcfa;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+.diff-viewer { max-height: 280px; overflow: auto; }
+.diff-line { display: block; white-space: pre; font-family: "Cascadia Mono", Consolas, monospace; font-size: 12px; }
+.diff-line.add { color: var(--ok); background: #edf7ef; }
+.diff-line.del { color: var(--danger); background: #fbefef; }
+.diff-line.meta { color: var(--accent); background: #eef2ec; }
 .chart-row {
   display: grid;
   grid-template-columns: 92px 1fr 34px;
@@ -479,14 +589,18 @@ const labels = {
     search: '搜索目标、状态、run id', report: '报告', multi: '多 Agent 树', empty: '暂无数据',
     language: 'English', status: '状态', events: '事件', path: '路径', charts: '图表',
     reasons: '失败 / Blocked 原因', provider: 'Provider 指标', commands: '命令输出',
-    eventJson: '事件 JSON', all: '全部状态', sectionLink: 'section 深链'
+    eventJson: '事件 JSON', all: '全部状态', sectionLink: 'section 深链',
+    approval: '审批骨架', changedFiles: '变更文件', riskDecision: '风险决策',
+    diffViewer: 'Diff 查看器', reservedOnly: '仅预留，不执行', noExecutable: '无可执行动作'
   },
   en: {
     projects: 'Projects', runs: 'Run history', timeline: 'Event timeline', detail: 'Run detail',
     search: 'Search goal, status, run id', report: 'Report', multi: 'Multi-agent tree', empty: 'No data',
     language: '中文', status: 'Status', events: 'Events', path: 'Path', charts: 'Charts',
     reasons: 'Failed / blocked reasons', provider: 'Provider metrics', commands: 'Command output',
-    eventJson: 'Event JSON', all: 'All statuses', sectionLink: 'Section deep link'
+    eventJson: 'Event JSON', all: 'All statuses', sectionLink: 'Section deep link',
+    approval: 'Approval skeleton', changedFiles: 'Changed files', riskDecision: 'Risk decision',
+    diffViewer: 'Diff viewer', reservedOnly: 'Reserved only, no execution', noExecutable: 'No executable actions'
   }
 };
 let state = { lang: 'zh', project: 0, run: 0, section: 'Overview', query: '', status: 'all', event: 0 };
@@ -599,6 +713,7 @@ function renderDetail(run) {
     <h2>${esc(run.goal)}</h2>
     <div><span class="status ${esc(run.effective_status)}">${esc(run.effective_status)}</span>${esc(run.run_id)}</div>
     ${renderProvider(run.provider || {})}
+    ${renderApproval(run)}
     ${renderTree(run)}
     <div class="tabs">${Object.keys(sections).map(name => `
       <button class="tab ${name === state.section ? 'active' : ''}" onclick="selectSection('${escAttr(name)}')">${esc(tabName(name))}</button>`).join('')}</div>
@@ -617,6 +732,44 @@ function renderProvider(provider) {
 }
 function providerCard(label, value) {
   return `<div class="provider-card"><div class="provider-label">${esc(label)}</div><div class="provider-value">${esc(value)}</div></div>`;
+}
+function renderApproval(run) {
+  const approval = run.approval || {};
+  const actions = approval.reserved_actions || ['approve', 'resume', 'write', 'commit', 'push', 'delete'];
+  return `<div class="approval-panel">
+    <div class="section-title">${t('approval')}</div>
+    <div class="run-meta">${esc(approval.mode || 'read-only approval skeleton')} · ${t('reservedOnly')} · ${t('noExecutable')}</div>
+    <div class="approval-actions">${actions.map(action => `<button class="disabled-action" disabled>${esc(action)} reserved</button>`).join('')}</div>
+    <div class="section-title">${t('changedFiles')}</div>
+    ${renderChangedFiles(run.changed_files || [])}
+    <div class="section-title">${t('riskDecision')}</div>
+    ${renderRiskDecisions(run.risk_decisions || [])}
+    <div class="section-title">${t('diffViewer')}</div>
+    ${renderDiff(run.diff || {})}
+  </div>`;
+}
+function renderChangedFiles(files) {
+  if (!files.length) return `<div class="run-meta">${t('empty')}</div>`;
+  return `<div class="file-list">${files.map(file => `<div class="file-item">${esc(file)}</div>`).join('')}</div>`;
+}
+function renderRiskDecisions(decisions) {
+  if (!decisions.length) return `<div class="run-meta">${t('empty')}</div>`;
+  return `<div class="risk-list">${decisions.map(decision => `
+    <div class="risk-item">
+      <span class="status ${esc(decision.status)}">${esc(decision.status)}</span>
+      ${esc(decision.name)} · ${esc(decision.level)} · ${esc(decision.reason)}
+    </div>`).join('')}</div>`;
+}
+function renderDiff(diff) {
+  if (diff.missing || !diff.content) return `<div class="run-meta">${t('empty')}</div>`;
+  return `<div class="code diff-viewer">${String(diff.content).split('\n').map(renderDiffLine).join('')}</div>`;
+}
+function renderDiffLine(line) {
+  let tone = '';
+  if (line.startsWith('+') && !line.startsWith('+++')) tone = 'add';
+  if (line.startsWith('-') && !line.startsWith('---')) tone = 'del';
+  if (line.startsWith('diff ') || line.startsWith('@@') || line.startsWith('+++') || line.startsWith('---')) tone = 'meta';
+  return `<span class="diff-line ${tone}">${esc(line || ' ')}</span>`;
 }
 function renderEvidence(run) {
   const event = (run.events || [])[state.event] || (run.events || [])[0] || {};
