@@ -134,7 +134,7 @@ Start the read-only local workbench:
 loopforge workbench
 ```
 
-The workbench opens a local web UI for projects, run history, status charts, blocked or failed reason distribution, event timeline, changed files, diff previews, risk decisions, approval contract readiness, approval ledger timeline, disabled approval/resume skeleton, command output previews, event JSON detail, report section deep links, Git summary, automation summary, critique, and multi-agent tree.
+The workbench opens a local web UI for projects, run history, status charts, blocked or failed reason distribution, event timeline, changed files, diff previews, risk decisions, approval contract readiness, approval ledger timeline, scope replay status, audit signature placeholders, disabled approval/resume skeleton, command output previews, event JSON detail, report section deep links, Git summary, automation summary, critique, and multi-agent tree.
 
 Inspect approval readiness and ledger entries without executing approval actions:
 
@@ -160,4 +160,4 @@ python -m unittest discover -s tests
 - Add policy approvals for git push instead of only recording blocked push risk.
 - Expand multi-agent coordination from read-only summaries to approved write scopes.
 - Implement real provider adapters behind the provider interface.
-- Add audited execution adapters after approval decisions can be replay-checked against current scope.
+- Add audited execution adapters after approval decisions can be replay-checked and signed against current scope.

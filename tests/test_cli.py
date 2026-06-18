@@ -197,6 +197,65 @@ class CliArgTests(unittest.TestCase):
             self.assertIn("decision_recorded: false", stdout.getvalue())
             self.assertIn("conflict", stdout.getvalue())
 
+    def test_approval_show_prints_scope_replay_and_execution_readiness(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = root / "project"
+            project.mkdir()
+            store_root = root / ".agent"
+            result = Agent(store_root=store_root, project_path=project).run("Approval show")
+            run_store = RunStore(store_root, project_path=project)
+            ShellTools(run_store, result.run_id).run("echo approval")
+            events = run_store.read_events(result.run_id)
+            request = approval_requests_with_ids(
+                result.run_id,
+                evaluate_approval_contract(events),
+                approval_scope(events),
+            )[0]
+            with redirect_stdout(io.StringIO()):
+                main(
+                    [
+                        "--store",
+                        str(store_root),
+                        "--project",
+                        str(project),
+                        "approval",
+                        "decide",
+                        result.run_id,
+                        "--request-id",
+                        str(request["request_id"]),
+                        "--decision",
+                        "approve",
+                        "--actor",
+                        "tester",
+                        "--reason",
+                        "Reviewed output.",
+                        "--expires-at",
+                        "2999-01-01T00:00:00Z",
+                    ]
+                )
+
+            stdout = io.StringIO()
+            with redirect_stdout(stdout):
+                main(
+                    [
+                        "--store",
+                        str(store_root),
+                        "--project",
+                        str(project),
+                        "approval",
+                        "show",
+                        result.run_id,
+                    ]
+                )
+
+            output = stdout.getvalue()
+            self.assertIn("scope_evidence:", output)
+            self.assertIn("scope_replay:", output)
+            self.assertIn("execution_ready_approvals:", output)
+            self.assertIn('"replay_status": "matched"', output)
+            self.assertIn('"signature_status": "unsigned"', output)
+
 
 if __name__ == "__main__":
     unittest.main()

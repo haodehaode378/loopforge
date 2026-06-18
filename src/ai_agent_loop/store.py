@@ -8,7 +8,7 @@ from pathlib import Path
 from ai_agent_loop.approval import evaluate_approval_contract
 from ai_agent_loop.goal import Goal
 from ai_agent_loop.critique import render_critique
-from ai_agent_loop.ledger import read_approval_ledger, summarize_ledger
+from ai_agent_loop.ledger import approval_scope, approval_scope_evidence, read_approval_ledger, summarize_ledger
 from ai_agent_loop.loop import AgentStep, LoopResult
 from ai_agent_loop.project import Project, ProjectRegistry
 
@@ -365,7 +365,9 @@ def render_approval_readiness(
 ) -> str:
     contract = evaluate_approval_contract(events)
     contract_data = contract.to_dict()
-    ledger = summarize_ledger(ledger_entries or [])
+    scope = approval_scope(events)
+    evidence = approval_scope_evidence(events)
+    ledger = summarize_ledger(ledger_entries or [], scope)
     changed_files = collect_changed_files(events)
     diff_events = [
         event for event in events
@@ -385,15 +387,54 @@ def render_approval_readiness(
             "Missing approvals:\n" + render_approval_requests(contract_data["missing_approvals"]),
             "Blocked actions:\n" + render_approval_decisions(contract_data["blocked_actions"]),
             "Resume eligibility:\n" + render_resume_eligibility(contract_data["resume_eligibility"]),
+            "Scope evidence:\n" + render_scope_evidence(evidence),
             "Ledger status:\n" + render_ledger_status(ledger),
             "Active approvals:\n" + render_ledger_entries(ledger["active_approvals"]),
             "Expired approvals:\n" + render_ledger_entries(ledger["expired_approvals"]),
             "Revoked approvals:\n" + render_ledger_entries(ledger["revoked_approvals"]),
             "Denied approvals:\n" + render_ledger_entries(ledger["denied_approvals"]),
             "Conflict approvals:\n" + render_ledger_entries(ledger["conflict_approvals"]),
+            "Scope replay:\n" + render_scope_replay(ledger["scope_replay"]),
+            "Execution readiness:\n" + render_execution_ready(ledger["execution_ready_approvals"]),
             "Changed files:\n" + render_changed_files(changed_files),
             "Diff evidence:\n" + (f"- {len(diff_events)} diff artifact(s)" if diff_events else "- none"),
         ]
+    )
+
+
+def render_scope_evidence(evidence: dict[str, object]) -> str:
+    lines = [
+        f"- scope_hash: {evidence.get('scope_hash')}",
+        f"- has_evidence: {evidence.get('has_evidence')}",
+        f"- changed_files: {len(evidence.get('changed_files', []))}",
+        f"- diff_hashes: {len(evidence.get('diff_hashes', []))}",
+        f"- risk_scope: {len(evidence.get('risk_scope', []))}",
+        f"- command_scope: {len(evidence.get('command_scope', []))}",
+    ]
+    return "\n".join(lines)
+
+
+def render_scope_replay(records: object) -> str:
+    if not isinstance(records, list) or not records:
+        return "- none"
+    lines = []
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        lines.append(
+            f"- {record.get('decision_id')}: {record.get('replay_status')} "
+            f"(signature: {record.get('signature_status')}, execution_ready: {record.get('execution_ready')})"
+        )
+    return "\n".join(lines) if lines else "- none"
+
+
+def render_execution_ready(entries: object) -> str:
+    if not isinstance(entries, list) or not entries:
+        return "- none"
+    return "\n".join(
+        f"- {entry.get('decision_id')}: {entry.get('request_id')}"
+        for entry in entries
+        if isinstance(entry, dict)
     )
 
 
@@ -413,7 +454,9 @@ def render_ledger_entries(entries: object) -> str:
             continue
         lines.append(
             f"- {entry.get('decision_id')}: {entry.get('decision')} by {entry.get('actor')} "
-            f"until {entry.get('expires_at') or 'never'} - {entry.get('reason')}"
+            f"until {entry.get('expires_at') or 'never'} "
+            f"[replay: {entry.get('replay_status')}, signature: {entry.get('signature_status')}] "
+            f"- {entry.get('reason')}"
         )
     return "\n".join(lines) if lines else "- none"
 

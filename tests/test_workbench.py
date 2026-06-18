@@ -7,7 +7,7 @@ from tempfile import TemporaryDirectory
 from ai_agent_loop import Agent, MultiAgentRunner, RunStore
 from ai_agent_loop.approval import evaluate_approval_contract
 from ai_agent_loop.cli import build_parser, normalize_argv
-from ai_agent_loop.ledger import build_ledger_decision_record
+from ai_agent_loop.ledger import approval_scope, build_ledger_decision_record
 from ai_agent_loop.tools import GitTools, ShellTools
 from ai_agent_loop.workbench import build_workbench_snapshot, render_workbench_html
 
@@ -33,14 +33,15 @@ class WorkbenchTests(unittest.TestCase):
             done = Agent(store_root=store_root, project_path=project).run("Render workbench")
             done_store = RunStore(store_root, project_path=project)
             ShellTools(done_store, done.run_id).run("echo workbench-evidence")
-            request = evaluate_approval_contract(done_store.read_events(done.run_id)).required_approvals[0]
+            done_events = done_store.read_events(done.run_id)
+            request = evaluate_approval_contract(done_events).required_approvals[0]
             ledger_entry = build_ledger_decision_record(
                 done.run_id,
                 request,
                 actor="reviewer",
                 created_at="2026-06-18T00:00:00Z",
                 expires_at="2999-01-01T00:00:00Z",
-                scope=["shell:echo workbench-evidence"],
+                scope=approval_scope(done_events),
                 decision="approved",
                 reason="Reviewed shell output.",
             )
@@ -86,6 +87,10 @@ class WorkbenchTests(unittest.TestCase):
             self.assertTrue(done_run["approval"]["blocked_actions"])
             self.assertEqual(done_run["approval"]["ledger"]["status"], "present")
             self.assertEqual(len(done_run["approval"]["ledger"]["active_approvals"]), 1)
+            self.assertEqual(done_run["approval"]["ledger"]["scope_replay"][0]["replay_status"], "matched")
+            self.assertEqual(done_run["approval"]["ledger"]["scope_replay"][0]["signature_status"], "unsigned")
+            self.assertTrue(done_run["approval"]["ledger"]["execution_ready_approvals"])
+            self.assertTrue(done_run["approval"]["scope_evidence"]["has_evidence"])
 
             diff_data = next(run for run in project_data["runs"] if run["run_id"] == diff_run.run_id)
             self.assertIn("app.py", diff_data["changed_files"])
@@ -100,6 +105,8 @@ class WorkbenchTests(unittest.TestCase):
             self.assertIn("Blocked actions", diff_data["sections"]["Approval Readiness"])
             self.assertIn("Resume eligibility", diff_data["sections"]["Approval Readiness"])
             self.assertIn("Ledger status", diff_data["sections"]["Approval Readiness"])
+            self.assertIn("Scope replay", diff_data["sections"]["Approval Readiness"])
+            self.assertIn("Execution readiness", diff_data["sections"]["Approval Readiness"])
             self.assertTrue(diff_data["risk_decisions"])
 
             blocked_run = next(run for run in project_data["runs"] if run["run_id"] == blocked.run_id)
@@ -124,6 +131,8 @@ class WorkbenchTests(unittest.TestCase):
             self.assertIn("有效审批", html)
             self.assertIn("过期审批", html)
             self.assertIn("撤销审批", html)
+            self.assertIn("Scope replay", html)
+            self.assertIn("Execution ready", html)
             self.assertIn("变更文件", html)
             self.assertIn("风险决策", html)
             self.assertIn("Diff 查看器", html)

@@ -25,6 +25,9 @@ class LedgerEntry:
     scope_hash: str
     decision: str
     reason: str
+    scope_parts: tuple[str, ...] = ()
+    actor_signature: str = ""
+    signature_status: str = "unsigned"
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -37,6 +40,9 @@ class LedgerEntry:
             "scope_hash": self.scope_hash,
             "decision": self.decision,
             "reason": self.reason,
+            "scope_parts": list(self.scope_parts),
+            "actor_signature": self.actor_signature,
+            "signature_status": self.signature_status,
         }
 
 
@@ -63,6 +69,9 @@ def append_approval_ledger(run_dir: Path, entry: dict[str, object]) -> Path:
 
 
 def normalize_ledger_entry(data: dict[str, object]) -> dict[str, object]:
+    scope_parts = data.get("scope_parts", [])
+    if not isinstance(scope_parts, list):
+        scope_parts = []
     entry = LedgerEntry(
         entry_type=str(data.get("entry_type") or data.get("type") or "decision"),
         request_id=str(data.get("request_id") or ""),
@@ -73,6 +82,9 @@ def normalize_ledger_entry(data: dict[str, object]) -> dict[str, object]:
         scope_hash=str(data.get("scope_hash") or ""),
         decision=str(data.get("decision") or ""),
         reason=str(data.get("reason") or ""),
+        scope_parts=tuple(str(part) for part in scope_parts),
+        actor_signature=str(data.get("actor_signature") or ""),
+        signature_status=str(data.get("signature_status") or "unsigned"),
     ).to_dict()
     entry["status"] = ledger_entry_status(entry)
     return entry
@@ -92,7 +104,10 @@ def ledger_entry_status(entry: dict[str, object], now: datetime | None = None) -
     return "inactive"
 
 
-def summarize_ledger(entries: list[dict[str, object]]) -> dict[str, object]:
+def summarize_ledger(
+    entries: list[dict[str, object]],
+    current_scope: list[str] | None = None,
+) -> dict[str, object]:
     entries = [normalize_ledger_entry(entry) for entry in entries]
     revoked_decision_ids = {
         str(entry.get("decision_id"))
@@ -106,11 +121,15 @@ def summarize_ledger(entries: list[dict[str, object]]) -> dict[str, object]:
     for entry in entries:
         if entry.get("request_id") in conflict_request_ids and entry.get("status") in {"active", "denied"}:
             entry["status"] = "conflict"
+    for entry in entries:
+        entry["replay_status"] = replay_status(entry, current_scope)
+        entry["execution_ready"] = is_execution_ready(entry, current_scope)
     active = [entry for entry in entries if entry.get("status") == "active"]
     expired = [entry for entry in entries if entry.get("status") == "expired"]
     revoked = [entry for entry in entries if entry.get("status") == "revoked"]
     denied = [entry for entry in entries if entry.get("status") == "denied"]
     conflicts = [entry for entry in entries if entry.get("status") == "conflict"]
+    replay_records = [ledger_replay_record(entry) for entry in entries]
     return {
         "ledger_file": LEDGER_FILENAME,
         "entry_count": len(entries),
@@ -119,8 +138,66 @@ def summarize_ledger(entries: list[dict[str, object]]) -> dict[str, object]:
         "revoked_approvals": revoked,
         "denied_approvals": denied,
         "conflict_approvals": conflicts,
+        "scope_replay": replay_records,
+        "replay_status_counts": replay_status_counts(replay_records),
+        "execution_ready_approvals": [
+            entry for entry in entries
+            if entry.get("execution_ready")
+        ],
         "status": "present" if entries else "empty",
     }
+
+
+def replay_status(
+    entry: dict[str, object],
+    current_scope: list[str] | None,
+) -> str:
+    status = str(entry.get("status") or "")
+    if status in {"expired", "revoked", "denied", "conflict"}:
+        return status
+    if current_scope is None:
+        return "missing evidence"
+    if not current_scope or not entry.get("scope_hash"):
+        return "missing evidence"
+    return "matched" if entry.get("scope_hash") == scope_hash(current_scope) else "changed"
+
+
+def is_execution_ready(
+    entry: dict[str, object],
+    current_scope: list[str] | None,
+) -> bool:
+    return entry.get("status") == "active" and replay_status(entry, current_scope) == "matched"
+
+
+def ledger_replay_record(entry: dict[str, object]) -> dict[str, object]:
+    return {
+        "request_id": entry.get("request_id", ""),
+        "decision_id": entry.get("decision_id", ""),
+        "decision": entry.get("decision", ""),
+        "status": entry.get("status", ""),
+        "replay_status": entry.get("replay_status", "missing evidence"),
+        "execution_ready": bool(entry.get("execution_ready")),
+        "scope_hash": entry.get("scope_hash", ""),
+        "actor": entry.get("actor", ""),
+        "actor_signature": entry.get("actor_signature", ""),
+        "signature_status": entry.get("signature_status", "unsigned"),
+    }
+
+
+def replay_status_counts(records: list[dict[str, object]]) -> dict[str, int]:
+    counts = {
+        "matched": 0,
+        "changed": 0,
+        "missing evidence": 0,
+        "expired": 0,
+        "revoked": 0,
+        "denied": 0,
+        "conflict": 0,
+    }
+    for record in records:
+        status = str(record.get("replay_status") or "missing evidence")
+        counts[status] = counts.get(status, 0) + 1
+    return counts
 
 
 def find_conflict_request_ids(entries: list[dict[str, object]]) -> set[str]:
@@ -177,9 +254,41 @@ def approval_scope(events: list[dict[str, object]]) -> list[str]:
                     ]
                 )
             )
+        command = metadata.get("command")
+        if command:
+            scope.append(f"command:{command}")
         if artifacts.get("diff"):
-            scope.append(f"diff:{artifacts.get('diff')}")
+            diff_value = str(artifacts.get("diff"))
+            preview = event.get("artifact_previews", {})
+            content = ""
+            if isinstance(preview, dict):
+                diff_preview = preview.get("diff", {})
+                if isinstance(diff_preview, dict):
+                    content = str(diff_preview.get("content") or "")
+            evidence = content if content else diff_value
+            scope.append(f"diff:{scope_hash([evidence])}")
     return sorted(set(scope))
+
+
+def approval_scope_evidence(events: list[dict[str, object]]) -> dict[str, object]:
+    parts = approval_scope(events)
+    return {
+        "scope_hash": scope_hash(parts),
+        "scope_parts": parts,
+        "changed_files": scope_values(parts, "changed:"),
+        "diff_hashes": scope_values(parts, "diff:"),
+        "risk_scope": scope_values(parts, "risk:"),
+        "command_scope": scope_values(parts, "command:"),
+        "has_evidence": bool(parts),
+    }
+
+
+def scope_values(parts: list[str], prefix: str) -> list[str]:
+    return [
+        part[len(prefix):]
+        for part in parts
+        if part.startswith(prefix)
+    ]
 
 
 def request_id(run_id: str, request: ApprovalRequest, scope: list[str]) -> str:
@@ -239,6 +348,9 @@ def build_ledger_decision_record(
         scope_hash=scope_hash(scope),
         decision=decision,
         reason=reason,
+        scope_parts=tuple(sorted(scope)),
+        actor_signature="",
+        signature_status="unsigned",
     ).to_dict()
 
 

@@ -89,6 +89,7 @@ Current workbench behavior:
 - The UI shows approval contract readiness from pure policy evaluation: required approvals, missing approvals, eligible actions, blocked actions, and resume eligibility.
 - The UI and `loopforge approval <run_id>` show approval ledger status from `approvals.jsonl`.
 - `loopforge approval decide <run_id> ...` only appends a ledger decision or denial after request id and scope validation; it does not execute reserved actions.
+- Approval ledger entries carry scope evidence, replay status, and unsigned audit signature placeholders. Only active approvals with matched scope replay are marked execution-ready, but no execution adapter consumes them yet.
 - The UI does not approve, resume, write, call models, log in, or sync.
 
 ## Run Store

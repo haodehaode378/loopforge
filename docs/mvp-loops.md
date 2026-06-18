@@ -439,3 +439,30 @@ If incomplete:
 
 - Keep Loop 14 read-only ledger as the reliable baseline.
 - Do not add resume/write/commit/push/delete execution adapters.
+
+## Loop 16: Scope Replay And Audit Signature
+
+Goal: prove recorded approval decisions still match the current evidence before any future execution adapter can use them.
+
+Must complete:
+
+- Bind approval decisions to changed files, diff evidence hash, risk scope, and command scope.
+- Add scope replay statuses: matched, changed, missing evidence, expired, revoked, denied, and conflict.
+- Add audit signature placeholder fields: actor_signature and signature_status.
+- Mark execution-ready only when an approval is active and scope replay is matched.
+- Show scope evidence, replay status, signature status, and execution readiness in reports.
+- Show the same replay and signature fields in `loopforge approval <run_id>`.
+- Show the same replay and signature fields in the read-only workbench.
+- Keep approve, resume, write, commit, push, and delete non-executable.
+
+Verification:
+
+- Unit tests cover matched, changed, missing evidence, denied, expired, revoked, conflict, and unsigned signature states.
+- CLI approval output includes scope evidence, scope replay, and execution-ready approvals.
+- Report Approval Readiness includes scope replay and execution readiness.
+- Workbench snapshot and browser smoke test show replay and signature sections.
+
+If incomplete:
+
+- Keep Loop 15 decision recording as the reliable baseline.
+- Do not add execution adapters or clickable approval buttons.

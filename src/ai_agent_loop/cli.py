@@ -14,6 +14,7 @@ from ai_agent_loop.ledger import (
     append_approval_ledger,
     approval_requests_with_ids,
     approval_scope,
+    approval_scope_evidence,
     build_ledger_decision_record,
     read_approval_ledger,
     summarize_ledger,
@@ -301,10 +302,13 @@ def show_approval(store: str, project: str, run_id: str) -> None:
     contract = contract_model.to_dict()
     scope = approval_scope(events)
     requests = approval_requests_with_ids(run_id, contract_model, scope)
-    ledger = summarize_ledger(read_approval_ledger(run_store.run_dir(run_id)))
+    ledger = summarize_ledger(read_approval_ledger(run_store.run_dir(run_id)), scope)
+    evidence = approval_scope_evidence(events)
     print(f"run_id: {run_id}")
     print(f"mode: {contract['mode']}")
-    print(f"scope_hash: {ledger_scope_hash(scope)}")
+    print(f"scope_hash: {evidence['scope_hash']}")
+    print("scope_evidence:")
+    print_json_lines(evidence)
     print("required_approvals:")
     print_json_lines(requests)
     print("missing_approvals:")
@@ -326,6 +330,10 @@ def show_approval(store: str, project: str, run_id: str) -> None:
     print_json_lines(ledger["denied_approvals"])
     print("conflict_approvals:")
     print_json_lines(ledger["conflict_approvals"])
+    print("scope_replay:")
+    print_json_lines(ledger["scope_replay"])
+    print("execution_ready_approvals:")
+    print_json_lines(ledger["execution_ready_approvals"])
 
 
 def record_approval_decision(args: argparse.Namespace) -> None:
@@ -377,12 +385,6 @@ def record_approval_decision(args: argparse.Namespace) -> None:
 
 def parse_cli_time(value: str) -> datetime:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
-
-
-def ledger_scope_hash(scope: list[str]) -> str:
-    from ai_agent_loop.ledger import scope_hash
-
-    return scope_hash(scope)
 
 
 def print_json_lines(items: object) -> None:

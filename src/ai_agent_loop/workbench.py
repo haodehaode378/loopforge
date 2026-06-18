@@ -8,7 +8,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from ai_agent_loop.approval import evaluate_approval_contract
-from ai_agent_loop.ledger import read_approval_ledger, summarize_ledger
+from ai_agent_loop.ledger import approval_scope, approval_scope_evidence, read_approval_ledger, summarize_ledger
 from ai_agent_loop.project import ProjectRegistry
 from ai_agent_loop.store import (
     find_blocked_reason,
@@ -89,7 +89,8 @@ def read_run(run_dir: Path) -> dict[str, object]:
     goal_record = json.loads((run_dir / "goal.json").read_text(encoding="utf-8"))
     events = read_events(run_dir / "events.jsonl")
     events = enrich_events_with_artifacts(events, run_dir)
-    report = read_dynamic_report(run_dir / "report.md", events)
+    ledger_entries = read_approval_ledger(run_dir)
+    report = read_dynamic_report(run_dir / "report.md", events, ledger_entries)
     metadata = goal_record.get("metadata", {})
     if not isinstance(metadata, dict):
         metadata = {}
@@ -97,7 +98,6 @@ def read_run(run_dir: Path) -> dict[str, object]:
     changed_files = collect_changed_files(events)
     risk_decisions = collect_risk_decisions(events)
     diff = read_diff_preview(run_dir, events)
-    ledger_entries = read_approval_ledger(run_dir)
     return {
         "run_id": run_dir.name,
         "goal": goal_record.get("description", ""),
@@ -112,7 +112,7 @@ def read_run(run_dir: Path) -> dict[str, object]:
         "risk_decisions": risk_decisions,
         "diff": diff,
         "approval": build_approval_readiness(changed_files, risk_decisions, diff, events, ledger_entries),
-        "approval_ledger": summarize_ledger(ledger_entries),
+        "approval_ledger": summarize_ledger(ledger_entries, approval_scope(events)),
         "parent_run_id": metadata.get("parent_run_id", ""),
         "child_run_ids": metadata.get("child_run_ids", []),
         "reviewer_run_id": metadata.get("reviewer_run_id", ""),
@@ -251,10 +251,12 @@ def build_approval_readiness(
     ledger_entries: list[dict[str, object]] | None = None,
 ) -> dict[str, object]:
     contract = evaluate_approval_contract(events).to_dict()
-    ledger = summarize_ledger(ledger_entries or [])
+    scope = approval_scope(events)
+    ledger = summarize_ledger(ledger_entries or [], scope)
     return {
         **contract,
         "ledger": ledger,
+        "scope_evidence": approval_scope_evidence(events),
         "status": "reserved",
         "changed_file_count": len(changed_files),
         "risk_decision_count": len(risk_decisions),
@@ -319,7 +321,11 @@ def failure_or_blocked_reason(run: dict[str, object]) -> str:
     return "unknown"
 
 
-def read_dynamic_report(path: Path, events: list[dict[str, object]]) -> str:
+def read_dynamic_report(
+    path: Path,
+    events: list[dict[str, object]],
+    ledger_entries: list[dict[str, object]] | None = None,
+) -> str:
     if not path.exists():
         return ""
     report = path.read_text(encoding="utf-8")
@@ -328,7 +334,7 @@ def read_dynamic_report(path: Path, events: list[dict[str, object]]) -> str:
     report = replace_automation_summary(report, render_automation_summary(events))
     report = replace_git_summary(report, render_git_summary(events))
     report = replace_multi_agent_summary(report, render_multi_agent_summary(events))
-    report = replace_approval_readiness(report, render_approval_readiness(events))
+    report = replace_approval_readiness(report, render_approval_readiness(events, ledger_entries or []))
     report = replace_sharp_review(report, render_critique(events))
     blocked_reason = find_blocked_reason(events)
     if blocked_reason and "## Blocked Reason" not in report:
@@ -546,6 +552,9 @@ button, select, input { font: inherit; }
 .ledger-item.active { border-left: 3px solid var(--ok); }
 .ledger-item.expired { border-left: 3px solid var(--warn); }
 .ledger-item.revoked { border-left: 3px solid var(--danger); }
+.ledger-item.changed, .ledger-item.conflict, .ledger-item.denied { border-left: 3px solid var(--danger); }
+.ledger-item.matched { border-left: 3px solid var(--ok); }
+.ledger-item.missing-evidence { border-left: 3px solid var(--warn); }
 .diff-viewer { max-height: 280px; overflow: auto; }
 .diff-line { display: block; white-space: pre; font-family: "Cascadia Mono", Consolas, monospace; font-size: 12px; }
 .diff-line.add { color: var(--ok); background: #edf7ef; }
@@ -606,7 +615,8 @@ const labels = {
     requiredApprovals: '所需审批', missingApprovals: '缺失审批',
     eligibleActions: '可展示动作', blockedActions: '被阻止动作', resumeEligibility: '恢复资格',
     ledger: '审批账本', activeApprovals: '有效审批', expiredApprovals: '过期审批',
-    revokedApprovals: '撤销审批', deniedApprovals: '拒绝审批', conflictApprovals: '冲突审批'
+    revokedApprovals: '撤销审批', deniedApprovals: '拒绝审批', conflictApprovals: '冲突审批',
+    scopeEvidence: 'Scope evidence', scopeReplay: 'Scope replay', executionReady: 'Execution ready'
   },
   en: {
     projects: 'Projects', runs: 'Run history', timeline: 'Event timeline', detail: 'Run detail',
@@ -619,7 +629,8 @@ const labels = {
     requiredApprovals: 'Required approvals', missingApprovals: 'Missing approvals',
     eligibleActions: 'Eligible actions', blockedActions: 'Blocked actions', resumeEligibility: 'Resume eligibility',
     ledger: 'Approval ledger', activeApprovals: 'Active approvals', expiredApprovals: 'Expired approvals',
-    revokedApprovals: 'Revoked approvals', deniedApprovals: 'Denied approvals', conflictApprovals: 'Conflict approvals'
+    revokedApprovals: 'Revoked approvals', deniedApprovals: 'Denied approvals', conflictApprovals: 'Conflict approvals',
+    scopeEvidence: 'Scope evidence', scopeReplay: 'Scope replay', executionReady: 'Execution ready'
   }
 };
 let state = { lang: 'zh', project: 0, run: 0, section: 'Overview', query: '', status: 'all', event: 0 };
@@ -769,6 +780,8 @@ function renderApproval(run) {
     ${renderBlockedActions(approval.blocked_actions || [])}
     <div class="section-title">${t('resumeEligibility')}</div>
     ${renderResumeEligibility(approval.resume_eligibility || {})}
+    <div class="section-title">${t('scopeEvidence')}</div>
+    ${renderScopeEvidence(approval.scope_evidence || {})}
     <div class="section-title">${t('ledger')}</div>
     ${renderLedger(approval.ledger || run.approval_ledger || {})}
     <div class="section-title">${t('changedFiles')}</div>
@@ -813,6 +826,10 @@ function renderLedger(ledger) {
     ${renderLedgerEntries(ledger.denied_approvals || [])}
     <div class="section-title">${t('conflictApprovals')}</div>
     ${renderLedgerEntries(ledger.conflict_approvals || [])}
+    <div class="section-title">${t('scopeReplay')}</div>
+    ${renderScopeReplay(ledger.scope_replay || [])}
+    <div class="section-title">${t('executionReady')}</div>
+    ${renderLedgerEntries(ledger.execution_ready_approvals || [])}
   </div>`;
 }
 function renderLedgerEntries(entries) {
@@ -820,8 +837,30 @@ function renderLedgerEntries(entries) {
   return entries.map(entry => `
     <div class="ledger-item ${esc(entry.status)}">
       ${esc(entry.decision_id)} · ${esc(entry.decision)} · ${esc(entry.actor)} · ${esc(entry.expires_at || 'never')}
+      <div class="run-meta">replay: ${esc(entry.replay_status || '')} · signature: ${esc(entry.signature_status || 'unsigned')}</div>
       <div class="run-meta">${esc(entry.reason || '')}</div>
     </div>`).join('');
+}
+function renderScopeEvidence(evidence) {
+  const rows = [
+    ['scope_hash', evidence.scope_hash || ''],
+    ['has_evidence', evidence.has_evidence ? 'true' : 'false'],
+    ['changed_files', (evidence.changed_files || []).length],
+    ['diff_hashes', (evidence.diff_hashes || []).length],
+    ['risk_scope', (evidence.risk_scope || []).length],
+    ['command_scope', (evidence.command_scope || []).length]
+  ];
+  return `<div class="file-list">${rows.map(([key, value]) => `<div class="file-item">${esc(key)}: ${esc(value)}</div>`).join('')}</div>`;
+}
+function renderScopeReplay(records) {
+  if (!records.length) return `<div class="run-meta">${t('empty')}</div>`;
+  return records.map(record => {
+    const replayClass = String(record.replay_status || 'missing evidence').replace(/\s+/g, '-');
+    return `<div class="ledger-item ${esc(replayClass)}">
+      ${esc(record.decision_id)} · ${esc(record.replay_status)} · ready: ${esc(record.execution_ready)}
+      <div class="run-meta">signature: ${esc(record.signature_status || 'unsigned')} · ${esc(record.actor || '')}</div>
+    </div>`;
+  }).join('');
 }
 function renderChangedFiles(files) {
   if (!files.length) return `<div class="run-meta">${t('empty')}</div>`;

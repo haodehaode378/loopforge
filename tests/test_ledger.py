@@ -5,6 +5,8 @@ from tempfile import TemporaryDirectory
 
 from ai_agent_loop.approval import evaluate_approval_contract
 from ai_agent_loop.ledger import (
+    approval_scope,
+    approval_scope_evidence,
     build_ledger_decision_record,
     build_ledger_revocation_record,
     read_approval_ledger,
@@ -136,6 +138,60 @@ class ApprovalLedgerTests(unittest.TestCase):
 
             self.assertEqual(entries[0]["decision_id"], "dec_1")
             self.assertEqual(entries[0]["status"], "active")
+
+    def test_scope_replay_marks_execution_ready_only_when_matched(self) -> None:
+        events = [
+            {
+                "name": "shell.run",
+                "status": "done",
+                "detail": "Recorded tool call",
+                "risk": {"level": "medium", "reason": "Shell command can change project state."},
+                "metadata": {"command": "echo approval"},
+            }
+        ]
+        scope = approval_scope(events)
+        request = evaluate_approval_contract(events).required_approvals[0]
+        entry = build_ledger_decision_record(
+            "run-1",
+            request,
+            actor="alice",
+            created_at="2026-06-18T00:00:00Z",
+            expires_at="2999-01-01T00:00:00Z",
+            scope=scope,
+            decision="approved",
+            reason="Reviewed.",
+        )
+
+        matched = summarize_ledger([entry], scope)
+        changed = summarize_ledger([entry], ["command:echo changed"])
+        missing = summarize_ledger([entry], [])
+
+        self.assertEqual(matched["scope_replay"][0]["replay_status"], "matched")
+        self.assertTrue(matched["execution_ready_approvals"][0]["execution_ready"])
+        self.assertEqual(matched["scope_replay"][0]["signature_status"], "unsigned")
+        self.assertEqual(changed["scope_replay"][0]["replay_status"], "changed")
+        self.assertEqual(changed["execution_ready_approvals"], [])
+        self.assertEqual(missing["scope_replay"][0]["replay_status"], "missing evidence")
+
+    def test_scope_evidence_groups_changed_diff_risk_and_command_parts(self) -> None:
+        events = [
+            {
+                "name": "git.diff",
+                "status": "done",
+                "risk": {"level": "medium", "reason": "Diff review required."},
+                "metadata": {"changed_files": ["app.py"], "command": "git diff"},
+                "artifacts": {"diff": "git/diff.patch"},
+                "artifact_previews": {"diff": {"content": "diff --git a/app.py b/app.py\n"}},
+            }
+        ]
+
+        evidence = approval_scope_evidence(events)
+
+        self.assertTrue(evidence["has_evidence"])
+        self.assertEqual(evidence["changed_files"], ["app.py"])
+        self.assertEqual(len(evidence["diff_hashes"]), 1)
+        self.assertEqual(evidence["command_scope"], ["git diff"])
+        self.assertEqual(len(evidence["risk_scope"]), 1)
 
 
 if __name__ == "__main__":
