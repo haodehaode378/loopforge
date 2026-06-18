@@ -389,6 +389,8 @@ def render_approval_readiness(
             "Active approvals:\n" + render_ledger_entries(ledger["active_approvals"]),
             "Expired approvals:\n" + render_ledger_entries(ledger["expired_approvals"]),
             "Revoked approvals:\n" + render_ledger_entries(ledger["revoked_approvals"]),
+            "Denied approvals:\n" + render_ledger_entries(ledger["denied_approvals"]),
+            "Conflict approvals:\n" + render_ledger_entries(ledger["conflict_approvals"]),
             "Changed files:\n" + render_changed_files(changed_files),
             "Diff evidence:\n" + (f"- {len(diff_events)} diff artifact(s)" if diff_events else "- none"),
         ]

@@ -87,7 +87,8 @@ Current workbench behavior:
 - The UI shows read-only status charts, failed or blocked reason distribution, provider token and cost placeholders, command output previews, event JSON detail, and report section deep links.
 - The UI shows changed files, diff previews, risk decisions, and disabled approval/resume skeleton actions.
 - The UI shows approval contract readiness from pure policy evaluation: required approvals, missing approvals, eligible actions, blocked actions, and resume eligibility.
-- The UI and `loopforge approval <run_id>` show read-only approval ledger status from `approvals.jsonl`.
+- The UI and `loopforge approval <run_id>` show approval ledger status from `approvals.jsonl`.
+- `loopforge approval decide <run_id> ...` only appends a ledger decision or denial after request id and scope validation; it does not execute reserved actions.
 - The UI does not approve, resume, write, call models, log in, or sync.
 
 ## Run Store

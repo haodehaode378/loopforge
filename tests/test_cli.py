@@ -1,6 +1,14 @@
+import io
+from contextlib import redirect_stdout
+from pathlib import Path
+from tempfile import TemporaryDirectory
 import unittest
 
-from ai_agent_loop.cli import build_parser, normalize_argv
+from ai_agent_loop import Agent, RunStore
+from ai_agent_loop.approval import evaluate_approval_contract
+from ai_agent_loop.cli import build_parser, main, normalize_argv
+from ai_agent_loop.ledger import approval_requests_with_ids, approval_scope, read_approval_ledger
+from ai_agent_loop.tools import ShellTools
 
 
 class CliArgTests(unittest.TestCase):
@@ -94,7 +102,100 @@ class CliArgTests(unittest.TestCase):
         args = build_parser().parse_args(normalize_argv(["approval", "run-1"]))
 
         self.assertEqual(args.command, "approval")
+        self.assertEqual(args.approval_command, "show")
         self.assertEqual(args.run_id, "run-1")
+
+    def test_approval_decide_records_decision_without_execution(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = root / "project"
+            project.mkdir()
+            store_root = root / ".agent"
+            result = Agent(store_root=store_root, project_path=project).run("Approval test")
+            run_store = RunStore(store_root, project_path=project)
+            ShellTools(run_store, result.run_id).run("echo approval")
+            events = run_store.read_events(result.run_id)
+            request = approval_requests_with_ids(
+                result.run_id,
+                evaluate_approval_contract(events),
+                approval_scope(events),
+            )[0]
+
+            stdout = io.StringIO()
+            with redirect_stdout(stdout):
+                main(
+                    [
+                        "--store",
+                        str(store_root),
+                        "--project",
+                        str(project),
+                        "approval",
+                        "decide",
+                        result.run_id,
+                        "--request-id",
+                        str(request["request_id"]),
+                        "--decision",
+                        "approve",
+                        "--actor",
+                        "tester",
+                        "--reason",
+                        "Reviewed output.",
+                        "--expires-at",
+                        "2999-01-01T00:00:00Z",
+                    ]
+                )
+
+            entries = read_approval_ledger(run_store.run_dir(result.run_id))
+            self.assertIn("decision_recorded: true", stdout.getvalue())
+            self.assertIn("No approval, resume, write, commit, push, or delete action was executed.", stdout.getvalue())
+            self.assertEqual(entries[0]["decision"], "approved")
+            self.assertEqual(entries[0]["actor"], "tester")
+
+    def test_approval_decide_rejects_duplicate_active_decision(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = root / "project"
+            project.mkdir()
+            store_root = root / ".agent"
+            result = Agent(store_root=store_root, project_path=project).run("Approval duplicate")
+            run_store = RunStore(store_root, project_path=project)
+            ShellTools(run_store, result.run_id).run("echo approval")
+            events = run_store.read_events(result.run_id)
+            request = approval_requests_with_ids(
+                result.run_id,
+                evaluate_approval_contract(events),
+                approval_scope(events),
+            )[0]
+            argv = [
+                "--store",
+                str(store_root),
+                "--project",
+                str(project),
+                "approval",
+                "decide",
+                result.run_id,
+                "--request-id",
+                str(request["request_id"]),
+                "--decision",
+                "approve",
+                "--actor",
+                "tester",
+                "--reason",
+                "Reviewed output.",
+                "--expires-at",
+                "2999-01-01T00:00:00Z",
+            ]
+            with redirect_stdout(io.StringIO()):
+                main(argv)
+
+            stdout = io.StringIO()
+            with redirect_stdout(stdout):
+                main(argv)
+
+            entries = read_approval_ledger(run_store.run_dir(result.run_id))
+            self.assertEqual(len(entries), 1)
+            self.assertIn("decision_recorded: false", stdout.getvalue())
+            self.assertIn("conflict", stdout.getvalue())
 
 
 if __name__ == "__main__":

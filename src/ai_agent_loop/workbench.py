@@ -605,7 +605,8 @@ const labels = {
     diffViewer: 'Diff 查看器', reservedOnly: '仅预留，不执行', noExecutable: '无可执行动作',
     requiredApprovals: '所需审批', missingApprovals: '缺失审批',
     eligibleActions: '可展示动作', blockedActions: '被阻止动作', resumeEligibility: '恢复资格',
-    ledger: '审批账本', activeApprovals: '有效审批', expiredApprovals: '过期审批', revokedApprovals: '撤销审批'
+    ledger: '审批账本', activeApprovals: '有效审批', expiredApprovals: '过期审批',
+    revokedApprovals: '撤销审批', deniedApprovals: '拒绝审批', conflictApprovals: '冲突审批'
   },
   en: {
     projects: 'Projects', runs: 'Run history', timeline: 'Event timeline', detail: 'Run detail',
@@ -617,7 +618,8 @@ const labels = {
     diffViewer: 'Diff viewer', reservedOnly: 'Reserved only, no execution', noExecutable: 'No executable actions',
     requiredApprovals: 'Required approvals', missingApprovals: 'Missing approvals',
     eligibleActions: 'Eligible actions', blockedActions: 'Blocked actions', resumeEligibility: 'Resume eligibility',
-    ledger: 'Approval ledger', activeApprovals: 'Active approvals', expiredApprovals: 'Expired approvals', revokedApprovals: 'Revoked approvals'
+    ledger: 'Approval ledger', activeApprovals: 'Active approvals', expiredApprovals: 'Expired approvals',
+    revokedApprovals: 'Revoked approvals', deniedApprovals: 'Denied approvals', conflictApprovals: 'Conflict approvals'
   }
 };
 let state = { lang: 'zh', project: 0, run: 0, section: 'Overview', query: '', status: 'all', event: 0 };
@@ -807,6 +809,10 @@ function renderLedger(ledger) {
     ${renderLedgerEntries(ledger.expired_approvals || [])}
     <div class="section-title">${t('revokedApprovals')}</div>
     ${renderLedgerEntries(ledger.revoked_approvals || [])}
+    <div class="section-title">${t('deniedApprovals')}</div>
+    ${renderLedgerEntries(ledger.denied_approvals || [])}
+    <div class="section-title">${t('conflictApprovals')}</div>
+    ${renderLedgerEntries(ledger.conflict_approvals || [])}
   </div>`;
 }
 function renderLedgerEntries(entries) {

@@ -73,9 +73,45 @@ class ApprovalLedgerTests(unittest.TestCase):
         summary = summarize_ledger([active, expired, revoked])
 
         self.assertEqual(summary["entry_count"], 3)
-        self.assertEqual(len(summary["active_approvals"]), 1)
+        self.assertEqual(len(summary["active_approvals"]), 0)
         self.assertEqual(len(summary["expired_approvals"]), 1)
-        self.assertEqual(len(summary["revoked_approvals"]), 1)
+        self.assertEqual(len(summary["revoked_approvals"]), 2)
+
+    def test_ledger_status_groups_denied_and_conflict_entries(self) -> None:
+        request = evaluate_approval_contract(
+            [
+                {
+                    "name": "file.write",
+                    "status": "done",
+                    "risk": {"level": "medium", "reason": "File write can change project state."},
+                }
+            ]
+        ).required_approvals[0]
+        approved = build_ledger_decision_record(
+            "run-1",
+            request,
+            actor="alice",
+            created_at="2026-06-18T00:00:00Z",
+            expires_at="2999-01-01T00:00:00Z",
+            scope=["app.py"],
+            decision="approved",
+            reason="Reviewed.",
+        )
+        denied = build_ledger_decision_record(
+            "run-1",
+            request,
+            actor="bob",
+            created_at="2026-06-18T01:00:00Z",
+            expires_at="2999-01-01T00:00:00Z",
+            scope=["other.py"],
+            decision="denied",
+            reason="Too broad.",
+        )
+
+        summary = summarize_ledger([approved, approved, denied])
+
+        self.assertEqual(len(summary["conflict_approvals"]), 2)
+        self.assertEqual(len(summary["denied_approvals"]), 1)
 
     def test_read_approval_ledger_reads_jsonl_file(self) -> None:
         with TemporaryDirectory() as temp_dir:

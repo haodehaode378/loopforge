@@ -142,6 +142,12 @@ Inspect approval readiness and ledger entries without executing approval actions
 loopforge approval <run_id>
 ```
 
+Record an approval decision in the ledger without executing the reserved action:
+
+```powershell
+loopforge approval decide <run_id> --request-id <id> --decision approve|deny --actor <name> --reason <text> --expires-at <iso>
+```
+
 Run tests:
 
 ```powershell
@@ -154,4 +160,4 @@ python -m unittest discover -s tests
 - Add policy approvals for git push instead of only recording blocked push risk.
 - Expand multi-agent coordination from read-only summaries to approved write scopes.
 - Implement real provider adapters behind the provider interface.
-- Add audited execution adapters after persisted approval decisions can be safely recorded and revoked.
+- Add audited execution adapters after approval decisions can be replay-checked against current scope.

@@ -5,11 +5,20 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from datetime import datetime, timezone
 
 from ai_agent_loop.agent import Agent
 from ai_agent_loop.approval import evaluate_approval_contract
 from ai_agent_loop.critique import render_critique
-from ai_agent_loop.ledger import read_approval_ledger, summarize_ledger
+from ai_agent_loop.ledger import (
+    append_approval_ledger,
+    approval_requests_with_ids,
+    approval_scope,
+    build_ledger_decision_record,
+    read_approval_ledger,
+    summarize_ledger,
+    validate_decision_record,
+)
 from ai_agent_loop.multi_agent import MultiAgentRunner
 from ai_agent_loop.store import RunStore
 from ai_agent_loop.tools import FileTools, GitTools, ShellTools
@@ -62,8 +71,17 @@ def build_parser() -> argparse.ArgumentParser:
     critique_parser = subparsers.add_parser("critique", help="Show dynamic run critique.")
     critique_parser.add_argument("run_id", help="Run ID to critique.")
 
-    approval_parser = subparsers.add_parser("approval", help="Show read-only approval contract and ledger.")
-    approval_parser.add_argument("run_id", help="Run ID to inspect for approval readiness.")
+    approval_parser = subparsers.add_parser("approval", help="Show or record approval ledger decisions.")
+    approval_subparsers = approval_parser.add_subparsers(dest="approval_command", required=True)
+    show_parser = approval_subparsers.add_parser("show", help="Show approval contract and ledger.")
+    show_parser.add_argument("run_id", help="Run ID to inspect for approval readiness.")
+    decide_parser = approval_subparsers.add_parser("decide", help="Record an approval ledger decision only.")
+    decide_parser.add_argument("run_id", help="Run ID to record a decision for.")
+    decide_parser.add_argument("--request-id", required=True)
+    decide_parser.add_argument("--decision", choices=["approve", "deny"], required=True)
+    decide_parser.add_argument("--actor", required=True)
+    decide_parser.add_argument("--reason", required=True)
+    decide_parser.add_argument("--expires-at", required=True)
 
     multi_parser = subparsers.add_parser("multi", help="Run read-only multi-agent analysis.")
     multi_parser.add_argument("goal", help="Goal for the multi-agent run.")
@@ -142,7 +160,10 @@ def main(argv: list[str] | None = None) -> None:
         return
 
     if args.command == "approval":
-        show_approval(args.store, args.project, args.run_id)
+        if args.approval_command == "decide":
+            record_approval_decision(args)
+        else:
+            show_approval(args.store, args.project, args.run_id)
         return
 
     if args.command == "multi":
@@ -187,8 +208,22 @@ def normalize_argv(argv: list[str] | None) -> list[str]:
             continue
         if value not in commands:
             return raw_args[:index] + ["run"] + raw_args[index:]
+        if value == "approval":
+            return normalize_approval_argv(raw_args, index)
         return raw_args
     return raw_args
+
+
+def normalize_approval_argv(raw_args: list[str], approval_index: int) -> list[str]:
+    next_index = approval_index + 1
+    if next_index >= len(raw_args):
+        return raw_args
+    next_value = raw_args[next_index]
+    if next_value in {"show", "decide"}:
+        return raw_args
+    if next_value.startswith("-"):
+        return raw_args
+    return raw_args[:next_index] + ["show"] + raw_args[next_index:]
 
 
 def run_goal(
@@ -262,12 +297,16 @@ def show_critique(store: str, project: str, run_id: str) -> None:
 def show_approval(store: str, project: str, run_id: str) -> None:
     run_store = RunStore(store, project_path=project)
     events = run_store.read_events(run_id)
-    contract = evaluate_approval_contract(events).to_dict()
+    contract_model = evaluate_approval_contract(events)
+    contract = contract_model.to_dict()
+    scope = approval_scope(events)
+    requests = approval_requests_with_ids(run_id, contract_model, scope)
     ledger = summarize_ledger(read_approval_ledger(run_store.run_dir(run_id)))
     print(f"run_id: {run_id}")
     print(f"mode: {contract['mode']}")
+    print(f"scope_hash: {ledger_scope_hash(scope)}")
     print("required_approvals:")
-    print_json_lines(contract["required_approvals"])
+    print_json_lines(requests)
     print("missing_approvals:")
     print_json_lines(contract["missing_approvals"])
     print("eligible_actions:")
@@ -283,6 +322,67 @@ def show_approval(store: str, project: str, run_id: str) -> None:
     print_json_lines(ledger["expired_approvals"])
     print("revoked_approvals:")
     print_json_lines(ledger["revoked_approvals"])
+    print("denied_approvals:")
+    print_json_lines(ledger["denied_approvals"])
+    print("conflict_approvals:")
+    print_json_lines(ledger["conflict_approvals"])
+
+
+def record_approval_decision(args: argparse.Namespace) -> None:
+    run_store = RunStore(args.store, project_path=args.project)
+    events = run_store.read_events(args.run_id)
+    contract = evaluate_approval_contract(events)
+    scope = approval_scope(events)
+    entries = read_approval_ledger(run_store.run_dir(args.run_id))
+    request, error = validate_decision_record(
+        args.run_id,
+        contract,
+        scope,
+        entries,
+        args.request_id,
+    )
+    if error:
+        print(f"decision_recorded: false")
+        print(error)
+        return
+    if request is None:
+        print("decision_recorded: false")
+        print("request-id is not part of the current approval contract.")
+        return
+    try:
+        parse_cli_time(args.expires_at)
+    except ValueError as error:
+        print("decision_recorded: false")
+        print(f"invalid expires-at: {error}")
+        return
+    created_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    ledger_decision = "approved" if args.decision == "approve" else "denied"
+    entry = build_ledger_decision_record(
+        args.run_id,
+        request,
+        actor=args.actor,
+        created_at=created_at,
+        expires_at=args.expires_at,
+        scope=scope,
+        decision=ledger_decision,
+        reason=args.reason,
+    )
+    append_approval_ledger(run_store.run_dir(args.run_id), entry)
+    print("decision_recorded: true")
+    print(f"request_id: {entry['request_id']}")
+    print(f"decision_id: {entry['decision_id']}")
+    print(f"decision: {entry['decision']}")
+    print("No approval, resume, write, commit, push, or delete action was executed.")
+
+
+def parse_cli_time(value: str) -> datetime:
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def ledger_scope_hash(scope: list[str]) -> str:
+    from ai_agent_loop.ledger import scope_hash
+
+    return scope_hash(scope)
 
 
 def print_json_lines(items: object) -> None:

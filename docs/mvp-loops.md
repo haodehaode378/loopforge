@@ -412,3 +412,30 @@ If incomplete:
 
 - Keep Loop 13 approval contract as the reliable baseline.
 - Do not add approval write commands or execution adapters.
+
+## Loop 15: Approval Decision Recorder
+
+Goal: allow a human decision to be recorded without executing the reserved action.
+
+Must complete:
+
+- Add `loopforge approval decide <run_id> --request-id <id> --decision approve|deny --actor <name> --reason <text> --expires-at <iso>`.
+- Validate request id against the current approval contract.
+- Validate scope hash against the current changed files, diff, and risk scope.
+- Append only approval decision or denial records to `approvals.jsonl`.
+- Detect duplicate active decisions as conflicts.
+- Ensure revoked or expired approvals are not counted as active.
+- Keep the workbench read-only and without clickable approval buttons.
+- Show active, expired, revoked, denied, and conflict approval states in reports.
+
+Verification:
+
+- Unit tests cover decision recording, request-id validation, duplicate conflict, denied approvals, expired approvals, and revoked approvals.
+- CLI decision recorder appends ledger entries and prints that no reserved action executed.
+- Workbench still only reads and displays ledger timeline.
+- Browser smoke test captures the rendered workbench.
+
+If incomplete:
+
+- Keep Loop 14 read-only ledger as the reliable baseline.
+- Do not add resume/write/commit/push/delete execution adapters.
