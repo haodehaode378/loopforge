@@ -87,6 +87,7 @@ Current workbench behavior:
 - The UI shows read-only status charts, failed or blocked reason distribution, provider token and cost placeholders, command output previews, event JSON detail, and report section deep links.
 - The UI shows changed files, diff previews, risk decisions, and disabled approval/resume skeleton actions.
 - The UI shows approval contract readiness from pure policy evaluation: required approvals, missing approvals, eligible actions, blocked actions, and resume eligibility.
+- The UI and `loopforge approval <run_id>` show read-only approval ledger status from `approvals.jsonl`.
 - The UI does not approve, resume, write, call models, log in, or sync.
 
 ## Run Store
@@ -107,6 +108,7 @@ Each run should be durable and easy to inspect:
 |               +-- goal.json
 |               +-- events.jsonl
 |               +-- report.md
+|               +-- approvals.jsonl
 |               +-- diff.patch
 |               +-- commands/
 |               |   +-- <step_id>.stdout.txt
@@ -114,7 +116,7 @@ Each run should be durable and easy to inspect:
 |               +-- artifacts/
 ```
 
-Only `projects.json`, `project.json`, `memory.json`, optional `settings.json`, `goal.json`, `events.jsonl`, command artifacts, and `report.md` exist today.
+Only `projects.json`, `project.json`, `memory.json`, optional `settings.json`, `goal.json`, `events.jsonl`, command artifacts, `approvals.jsonl`, and `report.md` exist today.
 
 ## Project Memory
 

@@ -161,6 +161,7 @@ Goal: make LoopForge feel like software, not just a CLI.
 - Show status charts, failed or blocked reason distribution, provider metrics, command output previews, event JSON detail, and report section deep links.
 - Show changed files, diff viewer, risk decisions, and disabled approval/resume skeleton.
 - Show approval contract readiness: required approvals, missing approvals, eligible actions, blocked actions, and resume eligibility.
+- Show approval ledger status, active approvals, expired approvals, and revoked approvals.
 - Show failures and blocked states.
 - Do not approve, retry, skip, resume, write, call models, log in, or sync.
 - Add Chinese default UI with English language switch.

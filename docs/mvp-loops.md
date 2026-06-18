@@ -385,3 +385,30 @@ If incomplete:
 
 - Keep Loop 12 disabled skeleton as the reliable baseline.
 - Do not add execution adapters.
+
+## Loop 14: Persisted Approval Ledger
+
+Goal: make approval evidence inspectable before any approval action can execute.
+
+Must complete:
+
+- Define read-only `approvals.jsonl` ledger structure.
+- Define request id, decision id, actor, created_at, expires_at, scope hash, decision reason, and revocation event fields.
+- Add ledger status helpers for active, expired, and revoked approvals.
+- Add `loopforge approval <run_id>` read-only command.
+- Show approval ledger timeline in the workbench.
+- Show ledger status, expired approvals, revoked approvals, and active approvals in Approval Readiness.
+- Keep approve, resume, write, commit, push, and delete non-executable.
+
+Verification:
+
+- Unit tests cover request id, decision id, scope hash, active approval, expired approval, revoked approval, and ledger file reading.
+- CLI approval command prints approval contract and ledger entries.
+- Report includes ledger status and approval groups.
+- Workbench snapshot and UI expose ledger timeline.
+- Browser smoke test captures the rendered workbench.
+
+If incomplete:
+
+- Keep Loop 13 approval contract as the reliable baseline.
+- Do not add approval write commands or execution adapters.

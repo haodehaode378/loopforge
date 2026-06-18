@@ -8,6 +8,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from ai_agent_loop.approval import evaluate_approval_contract
+from ai_agent_loop.ledger import read_approval_ledger, summarize_ledger
 from ai_agent_loop.project import ProjectRegistry
 from ai_agent_loop.store import (
     find_blocked_reason,
@@ -96,6 +97,7 @@ def read_run(run_dir: Path) -> dict[str, object]:
     changed_files = collect_changed_files(events)
     risk_decisions = collect_risk_decisions(events)
     diff = read_diff_preview(run_dir, events)
+    ledger_entries = read_approval_ledger(run_dir)
     return {
         "run_id": run_dir.name,
         "goal": goal_record.get("description", ""),
@@ -109,7 +111,8 @@ def read_run(run_dir: Path) -> dict[str, object]:
         "changed_files": changed_files,
         "risk_decisions": risk_decisions,
         "diff": diff,
-        "approval": build_approval_readiness(changed_files, risk_decisions, diff, events),
+        "approval": build_approval_readiness(changed_files, risk_decisions, diff, events, ledger_entries),
+        "approval_ledger": summarize_ledger(ledger_entries),
         "parent_run_id": metadata.get("parent_run_id", ""),
         "child_run_ids": metadata.get("child_run_ids", []),
         "reviewer_run_id": metadata.get("reviewer_run_id", ""),
@@ -245,10 +248,13 @@ def build_approval_readiness(
     risk_decisions: list[dict[str, object]],
     diff: dict[str, object],
     events: list[dict[str, object]],
+    ledger_entries: list[dict[str, object]] | None = None,
 ) -> dict[str, object]:
     contract = evaluate_approval_contract(events).to_dict()
+    ledger = summarize_ledger(ledger_entries or [])
     return {
         **contract,
+        "ledger": ledger,
         "status": "reserved",
         "changed_file_count": len(changed_files),
         "risk_decision_count": len(risk_decisions),
@@ -528,7 +534,7 @@ button, select, input { font: inherit; }
   cursor: not-allowed;
 }
 .file-list, .risk-list { display: grid; gap: 6px; margin: 8px 0; }
-.file-item, .risk-item {
+.file-item, .risk-item, .ledger-item {
   border: 1px solid var(--line);
   border-radius: 6px;
   padding: 7px 8px;
@@ -536,6 +542,10 @@ button, select, input { font: inherit; }
   overflow-wrap: anywhere;
   font-size: 12px;
 }
+.ledger-timeline { display: grid; gap: 6px; margin: 8px 0; }
+.ledger-item.active { border-left: 3px solid var(--ok); }
+.ledger-item.expired { border-left: 3px solid var(--warn); }
+.ledger-item.revoked { border-left: 3px solid var(--danger); }
 .diff-viewer { max-height: 280px; overflow: auto; }
 .diff-line { display: block; white-space: pre; font-family: "Cascadia Mono", Consolas, monospace; font-size: 12px; }
 .diff-line.add { color: var(--ok); background: #edf7ef; }
@@ -594,7 +604,8 @@ const labels = {
     approval: '审批骨架', changedFiles: '变更文件', riskDecision: '风险决策',
     diffViewer: 'Diff 查看器', reservedOnly: '仅预留，不执行', noExecutable: '无可执行动作',
     requiredApprovals: '所需审批', missingApprovals: '缺失审批',
-    eligibleActions: '可展示动作', blockedActions: '被阻止动作', resumeEligibility: '恢复资格'
+    eligibleActions: '可展示动作', blockedActions: '被阻止动作', resumeEligibility: '恢复资格',
+    ledger: '审批账本', activeApprovals: '有效审批', expiredApprovals: '过期审批', revokedApprovals: '撤销审批'
   },
   en: {
     projects: 'Projects', runs: 'Run history', timeline: 'Event timeline', detail: 'Run detail',
@@ -605,7 +616,8 @@ const labels = {
     approval: 'Approval skeleton', changedFiles: 'Changed files', riskDecision: 'Risk decision',
     diffViewer: 'Diff viewer', reservedOnly: 'Reserved only, no execution', noExecutable: 'No executable actions',
     requiredApprovals: 'Required approvals', missingApprovals: 'Missing approvals',
-    eligibleActions: 'Eligible actions', blockedActions: 'Blocked actions', resumeEligibility: 'Resume eligibility'
+    eligibleActions: 'Eligible actions', blockedActions: 'Blocked actions', resumeEligibility: 'Resume eligibility',
+    ledger: 'Approval ledger', activeApprovals: 'Active approvals', expiredApprovals: 'Expired approvals', revokedApprovals: 'Revoked approvals'
   }
 };
 let state = { lang: 'zh', project: 0, run: 0, section: 'Overview', query: '', status: 'all', event: 0 };
@@ -755,6 +767,8 @@ function renderApproval(run) {
     ${renderBlockedActions(approval.blocked_actions || [])}
     <div class="section-title">${t('resumeEligibility')}</div>
     ${renderResumeEligibility(approval.resume_eligibility || {})}
+    <div class="section-title">${t('ledger')}</div>
+    ${renderLedger(approval.ledger || run.approval_ledger || {})}
     <div class="section-title">${t('changedFiles')}</div>
     ${renderChangedFiles(run.changed_files || [])}
     <div class="section-title">${t('riskDecision')}</div>
@@ -782,6 +796,26 @@ function renderBlockedActions(actions) {
 function renderResumeEligibility(resume) {
   const label = resume.eligible ? 'eligible' : 'not eligible';
   return `<div class="risk-item">${label} · ${esc(resume.reason || '')}</div>`;
+}
+function renderLedger(ledger) {
+  const summary = `${esc(ledger.status || 'empty')} · ${esc(ledger.entry_count || 0)} entries · ${esc(ledger.ledger_file || 'approvals.jsonl')}`;
+  return `<div class="ledger-timeline">
+    <div class="ledger-item">${summary}</div>
+    <div class="section-title">${t('activeApprovals')}</div>
+    ${renderLedgerEntries(ledger.active_approvals || [])}
+    <div class="section-title">${t('expiredApprovals')}</div>
+    ${renderLedgerEntries(ledger.expired_approvals || [])}
+    <div class="section-title">${t('revokedApprovals')}</div>
+    ${renderLedgerEntries(ledger.revoked_approvals || [])}
+  </div>`;
+}
+function renderLedgerEntries(entries) {
+  if (!entries.length) return `<div class="run-meta">${t('empty')}</div>`;
+  return entries.map(entry => `
+    <div class="ledger-item ${esc(entry.status)}">
+      ${esc(entry.decision_id)} · ${esc(entry.decision)} · ${esc(entry.actor)} · ${esc(entry.expires_at || 'never')}
+      <div class="run-meta">${esc(entry.reason || '')}</div>
+    </div>`).join('');
 }
 function renderChangedFiles(files) {
   if (!files.length) return `<div class="run-meta">${t('empty')}</div>`;

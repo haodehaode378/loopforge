@@ -8,6 +8,7 @@ from pathlib import Path
 from ai_agent_loop.approval import evaluate_approval_contract
 from ai_agent_loop.goal import Goal
 from ai_agent_loop.critique import render_critique
+from ai_agent_loop.ledger import read_approval_ledger, summarize_ledger
 from ai_agent_loop.loop import AgentStep, LoopResult
 from ai_agent_loop.project import Project, ProjectRegistry
 
@@ -106,7 +107,8 @@ class RunStore:
         report = replace_automation_summary(report, render_automation_summary(events))
         report = replace_git_summary(report, render_git_summary(events))
         report = replace_multi_agent_summary(report, render_multi_agent_summary(events))
-        report = replace_approval_readiness(report, render_approval_readiness(events))
+        ledger = read_approval_ledger(self.run_dir(run_id))
+        report = replace_approval_readiness(report, render_approval_readiness(events, ledger))
         report = replace_sharp_review(report, render_critique(events))
         blocked_reason = find_blocked_reason(events)
         if blocked_reason and "## Blocked Reason" not in report:
@@ -357,9 +359,13 @@ def render_git_risk_decisions(events: list[dict[str, object]]) -> str:
     return "\n".join(lines) if lines else "- none"
 
 
-def render_approval_readiness(events: list[dict[str, object]]) -> str:
+def render_approval_readiness(
+    events: list[dict[str, object]],
+    ledger_entries: list[dict[str, object]] | None = None,
+) -> str:
     contract = evaluate_approval_contract(events)
     contract_data = contract.to_dict()
+    ledger = summarize_ledger(ledger_entries or [])
     changed_files = collect_changed_files(events)
     diff_events = [
         event for event in events
@@ -379,10 +385,35 @@ def render_approval_readiness(events: list[dict[str, object]]) -> str:
             "Missing approvals:\n" + render_approval_requests(contract_data["missing_approvals"]),
             "Blocked actions:\n" + render_approval_decisions(contract_data["blocked_actions"]),
             "Resume eligibility:\n" + render_resume_eligibility(contract_data["resume_eligibility"]),
+            "Ledger status:\n" + render_ledger_status(ledger),
+            "Active approvals:\n" + render_ledger_entries(ledger["active_approvals"]),
+            "Expired approvals:\n" + render_ledger_entries(ledger["expired_approvals"]),
+            "Revoked approvals:\n" + render_ledger_entries(ledger["revoked_approvals"]),
             "Changed files:\n" + render_changed_files(changed_files),
             "Diff evidence:\n" + (f"- {len(diff_events)} diff artifact(s)" if diff_events else "- none"),
         ]
     )
+
+
+def render_ledger_status(ledger: dict[str, object]) -> str:
+    return (
+        f"- {ledger.get('status')} "
+        f"({ledger.get('entry_count')} entries in {ledger.get('ledger_file')})"
+    )
+
+
+def render_ledger_entries(entries: object) -> str:
+    if not isinstance(entries, list) or not entries:
+        return "- none"
+    lines = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        lines.append(
+            f"- {entry.get('decision_id')}: {entry.get('decision')} by {entry.get('actor')} "
+            f"until {entry.get('expires_at') or 'never'} - {entry.get('reason')}"
+        )
+    return "\n".join(lines) if lines else "- none"
 
 
 def render_action_list(actions: object) -> str:

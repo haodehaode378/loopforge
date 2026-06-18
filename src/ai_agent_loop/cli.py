@@ -7,7 +7,9 @@ import json
 import sys
 
 from ai_agent_loop.agent import Agent
+from ai_agent_loop.approval import evaluate_approval_contract
 from ai_agent_loop.critique import render_critique
+from ai_agent_loop.ledger import read_approval_ledger, summarize_ledger
 from ai_agent_loop.multi_agent import MultiAgentRunner
 from ai_agent_loop.store import RunStore
 from ai_agent_loop.tools import FileTools, GitTools, ShellTools
@@ -59,6 +61,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     critique_parser = subparsers.add_parser("critique", help="Show dynamic run critique.")
     critique_parser.add_argument("run_id", help="Run ID to critique.")
+
+    approval_parser = subparsers.add_parser("approval", help="Show read-only approval contract and ledger.")
+    approval_parser.add_argument("run_id", help="Run ID to inspect for approval readiness.")
 
     multi_parser = subparsers.add_parser("multi", help="Run read-only multi-agent analysis.")
     multi_parser.add_argument("goal", help="Goal for the multi-agent run.")
@@ -136,6 +141,10 @@ def main(argv: list[str] | None = None) -> None:
         show_critique(args.store, args.project, args.run_id)
         return
 
+    if args.command == "approval":
+        show_approval(args.store, args.project, args.run_id)
+        return
+
     if args.command == "multi":
         run_multi(args.goal, args.store, args.project)
         return
@@ -164,7 +173,7 @@ def configure_stdio() -> None:
 
 def normalize_argv(argv: list[str] | None) -> list[str]:
     raw_args = list(sys.argv[1:] if argv is None else argv)
-    commands = {"run", "inspect", "report", "critique", "multi", "workbench", "resume", "tool"}
+    commands = {"run", "inspect", "report", "critique", "approval", "multi", "workbench", "resume", "tool"}
     options_with_values = {"--store", "--project"}
     skip_next = False
     for index, value in enumerate(raw_args):
@@ -248,6 +257,40 @@ def show_report(store: str, project: str, run_id: str) -> None:
 def show_critique(store: str, project: str, run_id: str) -> None:
     events = RunStore(store, project_path=project).read_events(run_id)
     sys.stdout.write(render_critique(events) + "\n")
+
+
+def show_approval(store: str, project: str, run_id: str) -> None:
+    run_store = RunStore(store, project_path=project)
+    events = run_store.read_events(run_id)
+    contract = evaluate_approval_contract(events).to_dict()
+    ledger = summarize_ledger(read_approval_ledger(run_store.run_dir(run_id)))
+    print(f"run_id: {run_id}")
+    print(f"mode: {contract['mode']}")
+    print("required_approvals:")
+    print_json_lines(contract["required_approvals"])
+    print("missing_approvals:")
+    print_json_lines(contract["missing_approvals"])
+    print("eligible_actions:")
+    for action in contract["eligible_actions"]:
+        print(f"- {action}")
+    print("blocked_actions:")
+    print_json_lines(contract["blocked_actions"])
+    print(f"resume_eligibility: {contract['resume_eligibility']}")
+    print(f"ledger_status: {ledger['status']}")
+    print("active_approvals:")
+    print_json_lines(ledger["active_approvals"])
+    print("expired_approvals:")
+    print_json_lines(ledger["expired_approvals"])
+    print("revoked_approvals:")
+    print_json_lines(ledger["revoked_approvals"])
+
+
+def print_json_lines(items: object) -> None:
+    if not isinstance(items, list) or not items:
+        print("- none")
+        return
+    for item in items:
+        print("- " + json.dumps(item, ensure_ascii=False, sort_keys=True))
 
 
 def run_multi(goal: str, store: str, project: str) -> None:

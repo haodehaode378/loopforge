@@ -11,6 +11,7 @@ from ai_agent_loop.approval import (
 from ai_agent_loop.autonomous import AutonomousRunner
 from ai_agent_loop.critique import build_critique, render_critique
 from ai_agent_loop.goal import Goal
+from ai_agent_loop.ledger import read_approval_ledger, summarize_ledger
 from ai_agent_loop.loop import AgentStep, LoopResult, run_loop
 from ai_agent_loop.multi_agent import MultiAgentResult, MultiAgentRunner
 from ai_agent_loop.policy import PolicyDecision
@@ -41,6 +42,7 @@ __all__ = [
     "Project",
     "ProjectRegistry",
     "ProviderSettings",
+    "read_approval_ledger",
     "RiskAssessment",
     "RunStore",
     "render_report",
@@ -50,4 +52,5 @@ __all__ = [
     "evaluate_approval_contract",
     "resolve_provider",
     "run_loop",
+    "summarize_ledger",
 ]

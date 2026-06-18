@@ -90,6 +90,12 @@ class CliArgTests(unittest.TestCase):
         self.assertEqual(args.command, "critique")
         self.assertEqual(args.run_id, "run-1")
 
+    def test_approval_command_parses_run_id(self) -> None:
+        args = build_parser().parse_args(normalize_argv(["approval", "run-1"]))
+
+        self.assertEqual(args.command, "approval")
+        self.assertEqual(args.run_id, "run-1")
+
 
 if __name__ == "__main__":
     unittest.main()

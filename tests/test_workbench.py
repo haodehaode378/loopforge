@@ -1,10 +1,13 @@
+import json
 import subprocess
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from ai_agent_loop import Agent, MultiAgentRunner, RunStore
+from ai_agent_loop.approval import evaluate_approval_contract
 from ai_agent_loop.cli import build_parser, normalize_argv
+from ai_agent_loop.ledger import build_ledger_decision_record
 from ai_agent_loop.tools import GitTools, ShellTools
 from ai_agent_loop.workbench import build_workbench_snapshot, render_workbench_html
 
@@ -28,10 +31,27 @@ class WorkbenchTests(unittest.TestCase):
             store_root = root / ".agent"
 
             done = Agent(store_root=store_root, project_path=project).run("Render workbench")
-            ShellTools(RunStore(store_root, project_path=project), done.run_id).run("echo workbench-evidence")
+            done_store = RunStore(store_root, project_path=project)
+            ShellTools(done_store, done.run_id).run("echo workbench-evidence")
+            request = evaluate_approval_contract(done_store.read_events(done.run_id)).required_approvals[0]
+            ledger_entry = build_ledger_decision_record(
+                done.run_id,
+                request,
+                actor="reviewer",
+                created_at="2026-06-18T00:00:00Z",
+                expires_at="2999-01-01T00:00:00Z",
+                scope=["shell:echo workbench-evidence"],
+                decision="approved",
+                reason="Reviewed shell output.",
+            )
+            (done_store.run_dir(done.run_id) / "approvals.jsonl").write_text(
+                json.dumps(ledger_entry, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+            )
             (project / "app.py").write_text("print('changed')\n", encoding="utf-8")
             diff_run = Agent(store_root=store_root, project_path=project).run("Review diff")
-            GitTools(RunStore(store_root, project_path=project), diff_run.run_id).diff()
+            diff_store = RunStore(store_root, project_path=project)
+            GitTools(diff_store, diff_run.run_id).diff()
             blocked = Agent(store_root=store_root, project_path=project).run("Blocked workbench")
             ShellTools(RunStore(store_root, project_path=project), blocked.run_id).run("git push origin main")
             multi = MultiAgentRunner(store_root=str(store_root), project_path=str(project)).run(
@@ -64,6 +84,8 @@ class WorkbenchTests(unittest.TestCase):
             self.assertTrue(done_run["approval"]["required_approvals"])
             self.assertTrue(done_run["approval"]["missing_approvals"])
             self.assertTrue(done_run["approval"]["blocked_actions"])
+            self.assertEqual(done_run["approval"]["ledger"]["status"], "present")
+            self.assertEqual(len(done_run["approval"]["ledger"]["active_approvals"]), 1)
 
             diff_data = next(run for run in project_data["runs"] if run["run_id"] == diff_run.run_id)
             self.assertIn("app.py", diff_data["changed_files"])
@@ -77,6 +99,7 @@ class WorkbenchTests(unittest.TestCase):
             self.assertIn("Missing approvals", diff_data["sections"]["Approval Readiness"])
             self.assertIn("Blocked actions", diff_data["sections"]["Approval Readiness"])
             self.assertIn("Resume eligibility", diff_data["sections"]["Approval Readiness"])
+            self.assertIn("Ledger status", diff_data["sections"]["Approval Readiness"])
             self.assertTrue(diff_data["risk_decisions"])
 
             blocked_run = next(run for run in project_data["runs"] if run["run_id"] == blocked.run_id)
@@ -97,6 +120,10 @@ class WorkbenchTests(unittest.TestCase):
             self.assertIn("可展示动作", html)
             self.assertIn("被阻止动作", html)
             self.assertIn("恢复资格", html)
+            self.assertIn("审批账本", html)
+            self.assertIn("有效审批", html)
+            self.assertIn("过期审批", html)
+            self.assertIn("撤销审批", html)
             self.assertIn("变更文件", html)
             self.assertIn("风险决策", html)
             self.assertIn("Diff 查看器", html)
