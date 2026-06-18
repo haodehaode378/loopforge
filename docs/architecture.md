@@ -24,6 +24,7 @@ src/ai_agent_loop/
 +-- autonomous.py Bounded fixture-only autonomous runner
 +-- cli.py      CLI entry point
 +-- critique.py Dynamic run critique
++-- evidence.py Evidence manifest hashes for replay
 +-- goal.py     Goal model
 +-- loop.py     Loop primitives
 +-- multi_agent.py Read-only parent/child run orchestration
@@ -90,6 +91,7 @@ Current workbench behavior:
 - The UI and `loopforge approval <run_id>` show approval ledger status from `approvals.jsonl`.
 - `loopforge approval decide <run_id> ...` only appends a ledger decision or denial after request id and scope validation; it does not execute reserved actions.
 - Approval ledger entries carry scope evidence, replay status, and unsigned audit signature placeholders. Only active approvals with matched scope replay are marked execution-ready, but no execution adapter consumes them yet.
+- `evidence_manifest.json` records hashes for core run files and referenced artifacts. Scope replay prefers manifest scope when present and falls back to event-derived scope for older runs with a visible `missing manifest` status.
 - The UI does not approve, resume, write, call models, log in, or sync.
 
 ## Run Store
@@ -111,6 +113,7 @@ Each run should be durable and easy to inspect:
 |               +-- events.jsonl
 |               +-- report.md
 |               +-- approvals.jsonl
+|               +-- evidence_manifest.json
 |               +-- diff.patch
 |               +-- commands/
 |               |   +-- <step_id>.stdout.txt
@@ -118,7 +121,7 @@ Each run should be durable and easy to inspect:
 |               +-- artifacts/
 ```
 
-Only `projects.json`, `project.json`, `memory.json`, optional `settings.json`, `goal.json`, `events.jsonl`, command artifacts, `approvals.jsonl`, and `report.md` exist today.
+Only `projects.json`, `project.json`, `memory.json`, optional `settings.json`, `goal.json`, `events.jsonl`, command artifacts, `approvals.jsonl`, `evidence_manifest.json`, and `report.md` exist today.
 
 ## Project Memory
 

@@ -34,6 +34,7 @@ It will focus on:
 |       +-- agent.py
 |       +-- autonomous.py
 |       +-- cli.py
+|       +-- evidence.py
 |       +-- goal.py
 |       +-- loop.py
 |       +-- multi_agent.py
@@ -74,6 +75,7 @@ This creates:
 .agent/projects/<project_id>/runs/<run_id>/goal.json
 .agent/projects/<project_id>/runs/<run_id>/events.jsonl
 .agent/projects/<project_id>/runs/<run_id>/report.md
+.agent/projects/<project_id>/runs/<run_id>/evidence_manifest.json
 ```
 
 Inspect run history:
@@ -134,7 +136,7 @@ Start the read-only local workbench:
 loopforge workbench
 ```
 
-The workbench opens a local web UI for projects, run history, status charts, blocked or failed reason distribution, event timeline, changed files, diff previews, risk decisions, approval contract readiness, approval ledger timeline, scope replay status, audit signature placeholders, disabled approval/resume skeleton, command output previews, event JSON detail, report section deep links, Git summary, automation summary, critique, and multi-agent tree.
+The workbench opens a local web UI for projects, run history, status charts, blocked or failed reason distribution, event timeline, changed files, diff previews, risk decisions, evidence manifest hashes, approval contract readiness, approval ledger timeline, scope replay status, audit signature placeholders, disabled approval/resume skeleton, command output previews, event JSON detail, report section deep links, Git summary, automation summary, critique, and multi-agent tree.
 
 Inspect approval readiness and ledger entries without executing approval actions:
 

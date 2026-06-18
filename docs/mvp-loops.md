@@ -466,3 +466,29 @@ If incomplete:
 
 - Keep Loop 15 decision recording as the reliable baseline.
 - Do not add execution adapters or clickable approval buttons.
+
+## Loop 17: Immutable Evidence Manifest
+
+Goal: make approval replay depend on a stable evidence manifest instead of only re-reading current event files.
+
+Must complete:
+
+- Generate `evidence_manifest.json` for each run.
+- Record hashes for `events.jsonl`, `report.md`, `approvals.jsonl`, diff artifacts, command stdout/stderr artifacts, and other referenced artifacts.
+- Record changed files, diff hashes, risk scope, command scope, created_at, scope parts, and scope hash.
+- Make approval scope replay prefer manifest scope when the manifest exists.
+- Keep older runs compatible by falling back to event-derived scope while showing `missing manifest`.
+- Show manifest status, evidence hashes, and replay source in report, CLI approval output, and Workbench.
+- Keep approve, resume, write, commit, push, and delete non-executable.
+
+Verification:
+
+- Unit tests cover manifest generation, hash capture, manifest-first scope replay, and missing manifest fallback.
+- Run persistence creates `evidence_manifest.json`.
+- CLI approval output includes manifest status and replay source.
+- Workbench snapshot and browser smoke test show manifest status and hashes.
+
+If incomplete:
+
+- Keep Loop 16 scope replay as the reliable baseline.
+- Do not add execution adapters or clickable approval buttons.

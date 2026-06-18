@@ -163,6 +163,7 @@ Goal: make LoopForge feel like software, not just a CLI.
 - Show approval contract readiness: required approvals, missing approvals, eligible actions, blocked actions, and resume eligibility.
 - Show approval ledger status, active approvals, expired approvals, revoked approvals, denied approvals, and conflict approvals.
 - Show approval scope replay status and audit signature placeholders before any execution adapter exists.
+- Show evidence manifest hashes for events, reports, approvals, diffs, command artifacts, changed files, risk scope, and command scope.
 - Show failures and blocked states.
 - Do not approve, retry, skip, resume, write, call models, log in, or sync.
 - Add Chinese default UI with English language switch.

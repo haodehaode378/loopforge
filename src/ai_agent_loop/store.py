@@ -6,9 +6,15 @@ import json
 from pathlib import Path
 
 from ai_agent_loop.approval import evaluate_approval_contract
+from ai_agent_loop.evidence import (
+    read_evidence_manifest,
+    scope_evidence_from_manifest_or_events,
+    scope_from_manifest_or_events,
+    write_evidence_manifest,
+)
 from ai_agent_loop.goal import Goal
 from ai_agent_loop.critique import render_critique
-from ai_agent_loop.ledger import approval_scope, approval_scope_evidence, read_approval_ledger, summarize_ledger
+from ai_agent_loop.ledger import read_approval_ledger, summarize_ledger
 from ai_agent_loop.loop import AgentStep, LoopResult
 from ai_agent_loop.project import Project, ProjectRegistry
 
@@ -32,6 +38,7 @@ class RunStore:
         self._write_json(run_dir / "goal.json", goal_to_record(result))
         self._write_events(run_dir / "events.jsonl", result)
         (run_dir / "report.md").write_text(render_report(result), encoding="utf-8")
+        write_evidence_manifest(run_dir, [step.to_dict() for step in result.steps])
 
         return run_dir
 
@@ -108,7 +115,8 @@ class RunStore:
         report = replace_git_summary(report, render_git_summary(events))
         report = replace_multi_agent_summary(report, render_multi_agent_summary(events))
         ledger = read_approval_ledger(self.run_dir(run_id))
-        report = replace_approval_readiness(report, render_approval_readiness(events, ledger))
+        manifest = read_evidence_manifest(self.run_dir(run_id))
+        report = replace_approval_readiness(report, render_approval_readiness(events, ledger, manifest))
         report = replace_sharp_review(report, render_critique(events))
         blocked_reason = find_blocked_reason(events)
         if blocked_reason and "## Blocked Reason" not in report:
@@ -121,6 +129,7 @@ class RunStore:
         events_path = run_dir / "events.jsonl"
         with events_path.open("a", encoding="utf-8") as file:
             file.write(json.dumps(event, ensure_ascii=False) + "\n")
+        write_evidence_manifest(run_dir, self.read_events(run_id))
 
     def write_artifact(
         self,
@@ -133,6 +142,7 @@ class RunStore:
         artifact_dir.mkdir(parents=True, exist_ok=True)
         path = artifact_dir / name
         path.write_text(content, encoding="utf-8")
+        write_evidence_manifest(self.run_dir(run_id), self.read_events(run_id))
         return path
 
     def next_artifact_id(self, run_id: str, prefix: str) -> str:
@@ -362,11 +372,17 @@ def render_git_risk_decisions(events: list[dict[str, object]]) -> str:
 def render_approval_readiness(
     events: list[dict[str, object]],
     ledger_entries: list[dict[str, object]] | None = None,
+    manifest: dict[str, object] | None = None,
 ) -> str:
     contract = evaluate_approval_contract(events)
     contract_data = contract.to_dict()
-    scope = approval_scope(events)
-    evidence = approval_scope_evidence(events)
+    evidence_manifest = manifest or {
+        "status": "missing manifest",
+        "manifest_file": "evidence_manifest.json",
+        "scope_replay_source": "events",
+    }
+    scope = scope_from_manifest_or_events(evidence_manifest, events)
+    evidence = scope_evidence_from_manifest_or_events(evidence_manifest, events)
     ledger = summarize_ledger(ledger_entries or [], scope)
     changed_files = collect_changed_files(events)
     diff_events = [
@@ -387,6 +403,7 @@ def render_approval_readiness(
             "Missing approvals:\n" + render_approval_requests(contract_data["missing_approvals"]),
             "Blocked actions:\n" + render_approval_decisions(contract_data["blocked_actions"]),
             "Resume eligibility:\n" + render_resume_eligibility(contract_data["resume_eligibility"]),
+            "Evidence manifest:\n" + render_evidence_manifest(evidence_manifest),
             "Scope evidence:\n" + render_scope_evidence(evidence),
             "Ledger status:\n" + render_ledger_status(ledger),
             "Active approvals:\n" + render_ledger_entries(ledger["active_approvals"]),
@@ -402,9 +419,31 @@ def render_approval_readiness(
     )
 
 
+def render_evidence_manifest(manifest: dict[str, object]) -> str:
+    core = manifest.get("core_hashes", {})
+    artifacts = manifest.get("artifact_hashes", {})
+    if not isinstance(core, dict):
+        core = {}
+    if not isinstance(artifacts, dict):
+        artifacts = {}
+    return "\n".join(
+        [
+            f"- status: {manifest.get('status', 'missing manifest')}",
+            f"- file: {manifest.get('manifest_file', 'evidence_manifest.json')}",
+            f"- replay_source: {manifest.get('scope_replay_source', 'events')}",
+            f"- events.jsonl: {core.get('events.jsonl', '') or 'missing'}",
+            f"- report.md: {core.get('report.md', '') or 'missing'}",
+            f"- approvals.jsonl: {core.get('approvals.jsonl', '') or 'missing'}",
+            f"- artifacts: {len(artifacts)}",
+        ]
+    )
+
+
 def render_scope_evidence(evidence: dict[str, object]) -> str:
     lines = [
         f"- scope_hash: {evidence.get('scope_hash')}",
+        f"- manifest_status: {evidence.get('manifest_status')}",
+        f"- scope_replay_source: {evidence.get('scope_replay_source')}",
         f"- has_evidence: {evidence.get('has_evidence')}",
         f"- changed_files: {len(evidence.get('changed_files', []))}",
         f"- diff_hashes: {len(evidence.get('diff_hashes', []))}",

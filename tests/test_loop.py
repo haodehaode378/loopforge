@@ -38,6 +38,7 @@ class RunLoopTests(unittest.TestCase):
             self.assertTrue((run_dir / "goal.json").exists())
             self.assertTrue((run_dir / "events.jsonl").exists())
             self.assertTrue((run_dir / "report.md").exists())
+            self.assertTrue((run_dir / "evidence_manifest.json").exists())
             self.assertIn("Ship the MVP", (run_dir / "report.md").read_text(encoding="utf-8"))
 
     def test_run_store_lists_and_reads_run_summary(self) -> None:
@@ -67,6 +68,7 @@ class RunLoopTests(unittest.TestCase):
             self.assertIn("Project ID:", report)
             self.assertIn("Project Path:", report)
             self.assertIn("## Sharp Review", report)
+            self.assertIn("Evidence manifest", report)
             self.assertIn("Render report", report)
 
     def test_projects_have_isolated_run_histories(self) -> None:

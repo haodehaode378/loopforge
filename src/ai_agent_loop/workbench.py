@@ -8,7 +8,12 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from ai_agent_loop.approval import evaluate_approval_contract
-from ai_agent_loop.ledger import approval_scope, approval_scope_evidence, read_approval_ledger, summarize_ledger
+from ai_agent_loop.evidence import (
+    read_evidence_manifest,
+    scope_evidence_from_manifest_or_events,
+    scope_from_manifest_or_events,
+)
+from ai_agent_loop.ledger import read_approval_ledger, summarize_ledger
 from ai_agent_loop.project import ProjectRegistry
 from ai_agent_loop.store import (
     find_blocked_reason,
@@ -90,7 +95,8 @@ def read_run(run_dir: Path) -> dict[str, object]:
     events = read_events(run_dir / "events.jsonl")
     events = enrich_events_with_artifacts(events, run_dir)
     ledger_entries = read_approval_ledger(run_dir)
-    report = read_dynamic_report(run_dir / "report.md", events, ledger_entries)
+    manifest = read_evidence_manifest(run_dir)
+    report = read_dynamic_report(run_dir / "report.md", events, ledger_entries, manifest)
     metadata = goal_record.get("metadata", {})
     if not isinstance(metadata, dict):
         metadata = {}
@@ -111,8 +117,9 @@ def read_run(run_dir: Path) -> dict[str, object]:
         "changed_files": changed_files,
         "risk_decisions": risk_decisions,
         "diff": diff,
-        "approval": build_approval_readiness(changed_files, risk_decisions, diff, events, ledger_entries),
-        "approval_ledger": summarize_ledger(ledger_entries, approval_scope(events)),
+        "approval": build_approval_readiness(changed_files, risk_decisions, diff, events, ledger_entries, manifest),
+        "approval_ledger": summarize_ledger(ledger_entries, scope_from_manifest_or_events(manifest, events)),
+        "evidence_manifest": manifest,
         "parent_run_id": metadata.get("parent_run_id", ""),
         "child_run_ids": metadata.get("child_run_ids", []),
         "reviewer_run_id": metadata.get("reviewer_run_id", ""),
@@ -249,14 +256,21 @@ def build_approval_readiness(
     diff: dict[str, object],
     events: list[dict[str, object]],
     ledger_entries: list[dict[str, object]] | None = None,
+    manifest: dict[str, object] | None = None,
 ) -> dict[str, object]:
     contract = evaluate_approval_contract(events).to_dict()
-    scope = approval_scope(events)
+    evidence_manifest = manifest or {
+        "status": "missing manifest",
+        "manifest_file": "evidence_manifest.json",
+        "scope_replay_source": "events",
+    }
+    scope = scope_from_manifest_or_events(evidence_manifest, events)
     ledger = summarize_ledger(ledger_entries or [], scope)
     return {
         **contract,
         "ledger": ledger,
-        "scope_evidence": approval_scope_evidence(events),
+        "scope_evidence": scope_evidence_from_manifest_or_events(evidence_manifest, events),
+        "evidence_manifest": evidence_manifest,
         "status": "reserved",
         "changed_file_count": len(changed_files),
         "risk_decision_count": len(risk_decisions),
@@ -325,6 +339,7 @@ def read_dynamic_report(
     path: Path,
     events: list[dict[str, object]],
     ledger_entries: list[dict[str, object]] | None = None,
+    manifest: dict[str, object] | None = None,
 ) -> str:
     if not path.exists():
         return ""
@@ -334,7 +349,7 @@ def read_dynamic_report(
     report = replace_automation_summary(report, render_automation_summary(events))
     report = replace_git_summary(report, render_git_summary(events))
     report = replace_multi_agent_summary(report, render_multi_agent_summary(events))
-    report = replace_approval_readiness(report, render_approval_readiness(events, ledger_entries or []))
+    report = replace_approval_readiness(report, render_approval_readiness(events, ledger_entries or [], manifest))
     report = replace_sharp_review(report, render_critique(events))
     blocked_reason = find_blocked_reason(events)
     if blocked_reason and "## Blocked Reason" not in report:
@@ -616,7 +631,8 @@ const labels = {
     eligibleActions: '可展示动作', blockedActions: '被阻止动作', resumeEligibility: '恢复资格',
     ledger: '审批账本', activeApprovals: '有效审批', expiredApprovals: '过期审批',
     revokedApprovals: '撤销审批', deniedApprovals: '拒绝审批', conflictApprovals: '冲突审批',
-    scopeEvidence: 'Scope evidence', scopeReplay: 'Scope replay', executionReady: 'Execution ready'
+    scopeEvidence: 'Scope evidence', scopeReplay: 'Scope replay', executionReady: 'Execution ready',
+    evidenceManifest: 'Evidence manifest'
   },
   en: {
     projects: 'Projects', runs: 'Run history', timeline: 'Event timeline', detail: 'Run detail',
@@ -630,7 +646,8 @@ const labels = {
     eligibleActions: 'Eligible actions', blockedActions: 'Blocked actions', resumeEligibility: 'Resume eligibility',
     ledger: 'Approval ledger', activeApprovals: 'Active approvals', expiredApprovals: 'Expired approvals',
     revokedApprovals: 'Revoked approvals', deniedApprovals: 'Denied approvals', conflictApprovals: 'Conflict approvals',
-    scopeEvidence: 'Scope evidence', scopeReplay: 'Scope replay', executionReady: 'Execution ready'
+    scopeEvidence: 'Scope evidence', scopeReplay: 'Scope replay', executionReady: 'Execution ready',
+    evidenceManifest: 'Evidence manifest'
   }
 };
 let state = { lang: 'zh', project: 0, run: 0, section: 'Overview', query: '', status: 'all', event: 0 };
@@ -780,6 +797,8 @@ function renderApproval(run) {
     ${renderBlockedActions(approval.blocked_actions || [])}
     <div class="section-title">${t('resumeEligibility')}</div>
     ${renderResumeEligibility(approval.resume_eligibility || {})}
+    <div class="section-title">${t('evidenceManifest')}</div>
+    ${renderEvidenceManifest(approval.evidence_manifest || run.evidence_manifest || {})}
     <div class="section-title">${t('scopeEvidence')}</div>
     ${renderScopeEvidence(approval.scope_evidence || {})}
     <div class="section-title">${t('ledger')}</div>
@@ -849,6 +868,20 @@ function renderScopeEvidence(evidence) {
     ['diff_hashes', (evidence.diff_hashes || []).length],
     ['risk_scope', (evidence.risk_scope || []).length],
     ['command_scope', (evidence.command_scope || []).length]
+  ];
+  return `<div class="file-list">${rows.map(([key, value]) => `<div class="file-item">${esc(key)}: ${esc(value)}</div>`).join('')}</div>`;
+}
+function renderEvidenceManifest(manifest) {
+  const core = manifest.core_hashes || {};
+  const artifacts = manifest.artifact_hashes || {};
+  const rows = [
+    ['status', manifest.status || 'missing manifest'],
+    ['file', manifest.manifest_file || 'evidence_manifest.json'],
+    ['replay_source', manifest.scope_replay_source || 'events'],
+    ['events.jsonl', core['events.jsonl'] || 'missing'],
+    ['report.md', core['report.md'] || 'missing'],
+    ['approvals.jsonl', core['approvals.jsonl'] || 'missing'],
+    ['artifacts', Object.keys(artifacts).length]
   ];
   return `<div class="file-list">${rows.map(([key, value]) => `<div class="file-item">${esc(key)}: ${esc(value)}</div>`).join('')}</div>`;
 }

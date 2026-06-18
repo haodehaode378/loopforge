@@ -9,12 +9,16 @@ from datetime import datetime, timezone
 
 from ai_agent_loop.agent import Agent
 from ai_agent_loop.approval import evaluate_approval_contract
+from ai_agent_loop.evidence import (
+    read_evidence_manifest,
+    scope_evidence_from_manifest_or_events,
+    scope_from_manifest_or_events,
+    write_evidence_manifest,
+)
 from ai_agent_loop.critique import render_critique
 from ai_agent_loop.ledger import (
     append_approval_ledger,
     approval_requests_with_ids,
-    approval_scope,
-    approval_scope_evidence,
     build_ledger_decision_record,
     read_approval_ledger,
     summarize_ledger,
@@ -300,12 +304,15 @@ def show_approval(store: str, project: str, run_id: str) -> None:
     events = run_store.read_events(run_id)
     contract_model = evaluate_approval_contract(events)
     contract = contract_model.to_dict()
-    scope = approval_scope(events)
+    manifest = read_evidence_manifest(run_store.run_dir(run_id))
+    scope = scope_from_manifest_or_events(manifest, events)
     requests = approval_requests_with_ids(run_id, contract_model, scope)
     ledger = summarize_ledger(read_approval_ledger(run_store.run_dir(run_id)), scope)
-    evidence = approval_scope_evidence(events)
+    evidence = scope_evidence_from_manifest_or_events(manifest, events)
     print(f"run_id: {run_id}")
     print(f"mode: {contract['mode']}")
+    print("evidence_manifest:")
+    print_json_lines(manifest)
     print(f"scope_hash: {evidence['scope_hash']}")
     print("scope_evidence:")
     print_json_lines(evidence)
@@ -340,7 +347,8 @@ def record_approval_decision(args: argparse.Namespace) -> None:
     run_store = RunStore(args.store, project_path=args.project)
     events = run_store.read_events(args.run_id)
     contract = evaluate_approval_contract(events)
-    scope = approval_scope(events)
+    manifest = read_evidence_manifest(run_store.run_dir(args.run_id))
+    scope = scope_from_manifest_or_events(manifest, events)
     entries = read_approval_ledger(run_store.run_dir(args.run_id))
     request, error = validate_decision_record(
         args.run_id,
@@ -376,6 +384,7 @@ def record_approval_decision(args: argparse.Namespace) -> None:
         reason=args.reason,
     )
     append_approval_ledger(run_store.run_dir(args.run_id), entry)
+    write_evidence_manifest(run_store.run_dir(args.run_id), events)
     print("decision_recorded: true")
     print(f"request_id: {entry['request_id']}")
     print(f"decision_id: {entry['decision_id']}")
@@ -388,6 +397,9 @@ def parse_cli_time(value: str) -> datetime:
 
 
 def print_json_lines(items: object) -> None:
+    if isinstance(items, dict):
+        print(f"- {json.dumps(items, ensure_ascii=False, sort_keys=True)}")
+        return
     if not isinstance(items, list) or not items:
         print("- none")
         return
