@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from ai_agent_loop.approval import evaluate_approval_contract
 from ai_agent_loop.goal import Goal
 from ai_agent_loop.critique import render_critique
 from ai_agent_loop.loop import AgentStep, LoopResult
@@ -357,8 +358,9 @@ def render_git_risk_decisions(events: list[dict[str, object]]) -> str:
 
 
 def render_approval_readiness(events: list[dict[str, object]]) -> str:
+    contract = evaluate_approval_contract(events)
+    contract_data = contract.to_dict()
     changed_files = collect_changed_files(events)
-    risk_events = [event for event in events if event.get("risk") or event.get("status") == "blocked"]
     diff_events = [
         event for event in events
         if event.get("name") == "git.diff"
@@ -369,14 +371,53 @@ def render_approval_readiness(events: list[dict[str, object]]) -> str:
     ]
     return "\n\n".join(
         [
-            "Mode:\n- read-only approval skeleton",
+            f"Mode:\n- {contract.mode}",
             "Executable actions:\n- none",
             "Reserved actions:\n- approve\n- resume\n- write\n- commit\n- push\n- delete",
+            "Eligible actions:\n" + render_action_list(contract_data["eligible_actions"]),
+            "Required approvals:\n" + render_approval_requests(contract_data["required_approvals"]),
+            "Missing approvals:\n" + render_approval_requests(contract_data["missing_approvals"]),
+            "Blocked actions:\n" + render_approval_decisions(contract_data["blocked_actions"]),
+            "Resume eligibility:\n" + render_resume_eligibility(contract_data["resume_eligibility"]),
             "Changed files:\n" + render_changed_files(changed_files),
             "Diff evidence:\n" + (f"- {len(diff_events)} diff artifact(s)" if diff_events else "- none"),
-            "Risk decisions:\n" + render_event_risks(risk_events),
         ]
     )
+
+
+def render_action_list(actions: object) -> str:
+    if not isinstance(actions, list) or not actions:
+        return "- none"
+    return "\n".join(f"- {action}" for action in actions)
+
+
+def render_approval_requests(requests: object) -> str:
+    if not isinstance(requests, list) or not requests:
+        return "- none"
+    return "\n".join(
+        f"- {item.get('action')}: {item.get('required_approval')} "
+        f"({item.get('risk_level')}) - {item.get('reason')}"
+        for item in requests
+        if isinstance(item, dict)
+    )
+
+
+def render_approval_decisions(decisions: object) -> str:
+    if not isinstance(decisions, list) or not decisions:
+        return "- none"
+    return "\n".join(
+        f"- {item.get('action')}: {'allowed' if item.get('allowed') else 'denied'} - "
+        f"{item.get('reason')}"
+        for item in decisions
+        if isinstance(item, dict)
+    )
+
+
+def render_resume_eligibility(resume: object) -> str:
+    if not isinstance(resume, dict):
+        return "- unknown"
+    state = "eligible" if resume.get("eligible") else "not eligible"
+    return f"- {state}: {resume.get('reason')}"
 
 
 def collect_changed_files(events: list[dict[str, object]]) -> list[str]:

@@ -360,3 +360,28 @@ If incomplete:
 
 - Keep Loop 11 evidence viewer as the reliable baseline.
 - Do not enable approve, resume, write, commit, push, or delete.
+
+## Loop 13: Approval Policy Contract
+
+Goal: define the policy contract before any real approval or resume execution exists.
+
+Must complete:
+
+- Add `approval.py` with pure approval request, decision, contract, and resume eligibility helpers.
+- Map risk levels to required approval kinds.
+- Evaluate reserved actions as allowed or denied with reasons.
+- Define approval event record shape.
+- Keep approval, resume, write, commit, push, and delete non-executable.
+- Show required approvals, eligible actions, blocked actions, missing approvals, and resume eligibility in Approval Readiness.
+
+Verification:
+
+- Unit tests cover risk-to-approval mapping, missing approvals, approval event shape, and resume eligibility.
+- Report includes the Approval Readiness contract fields.
+- Workbench snapshot and UI expose the contract fields.
+- Browser smoke test captures the rendered workbench.
+
+If incomplete:
+
+- Keep Loop 12 disabled skeleton as the reliable baseline.
+- Do not add execution adapters.

@@ -1,6 +1,13 @@
 """Minimal agent loop package."""
 
 from ai_agent_loop.agent import Agent
+from ai_agent_loop.approval import (
+    ApprovalContract,
+    ApprovalDecision,
+    ApprovalRequest,
+    ResumeEligibility,
+    evaluate_approval_contract,
+)
 from ai_agent_loop.autonomous import AutonomousRunner
 from ai_agent_loop.critique import build_critique, render_critique
 from ai_agent_loop.goal import Goal
@@ -17,6 +24,9 @@ from ai_agent_loop.workbench import build_workbench_snapshot, render_workbench_h
 __all__ = [
     "Agent",
     "AgentStep",
+    "ApprovalContract",
+    "ApprovalDecision",
+    "ApprovalRequest",
     "AutonomousRunner",
     "build_critique",
     "build_workbench_snapshot",
@@ -36,6 +46,8 @@ __all__ = [
     "render_report",
     "render_critique",
     "render_workbench_html",
+    "ResumeEligibility",
+    "evaluate_approval_contract",
     "resolve_provider",
     "run_loop",
 ]

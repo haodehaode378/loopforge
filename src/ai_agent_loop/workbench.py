@@ -7,6 +7,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
+from ai_agent_loop.approval import evaluate_approval_contract
 from ai_agent_loop.project import ProjectRegistry
 from ai_agent_loop.store import (
     find_blocked_reason,
@@ -108,7 +109,7 @@ def read_run(run_dir: Path) -> dict[str, object]:
         "changed_files": changed_files,
         "risk_decisions": risk_decisions,
         "diff": diff,
-        "approval": build_approval_readiness(changed_files, risk_decisions, diff),
+        "approval": build_approval_readiness(changed_files, risk_decisions, diff, events),
         "parent_run_id": metadata.get("parent_run_id", ""),
         "child_run_ids": metadata.get("child_run_ids", []),
         "reviewer_run_id": metadata.get("reviewer_run_id", ""),
@@ -243,12 +244,12 @@ def build_approval_readiness(
     changed_files: list[str],
     risk_decisions: list[dict[str, object]],
     diff: dict[str, object],
+    events: list[dict[str, object]],
 ) -> dict[str, object]:
+    contract = evaluate_approval_contract(events).to_dict()
     return {
-        "mode": "read-only approval skeleton",
+        **contract,
         "status": "reserved",
-        "executable_actions": [],
-        "reserved_actions": ["approve", "resume", "write", "commit", "push", "delete"],
         "changed_file_count": len(changed_files),
         "risk_decision_count": len(risk_decisions),
         "has_diff": not bool(diff.get("missing", True)),
@@ -591,7 +592,9 @@ const labels = {
     reasons: '失败 / Blocked 原因', provider: 'Provider 指标', commands: '命令输出',
     eventJson: '事件 JSON', all: '全部状态', sectionLink: 'section 深链',
     approval: '审批骨架', changedFiles: '变更文件', riskDecision: '风险决策',
-    diffViewer: 'Diff 查看器', reservedOnly: '仅预留，不执行', noExecutable: '无可执行动作'
+    diffViewer: 'Diff 查看器', reservedOnly: '仅预留，不执行', noExecutable: '无可执行动作',
+    requiredApprovals: '所需审批', missingApprovals: '缺失审批',
+    eligibleActions: '可展示动作', blockedActions: '被阻止动作', resumeEligibility: '恢复资格'
   },
   en: {
     projects: 'Projects', runs: 'Run history', timeline: 'Event timeline', detail: 'Run detail',
@@ -600,7 +603,9 @@ const labels = {
     reasons: 'Failed / blocked reasons', provider: 'Provider metrics', commands: 'Command output',
     eventJson: 'Event JSON', all: 'All statuses', sectionLink: 'Section deep link',
     approval: 'Approval skeleton', changedFiles: 'Changed files', riskDecision: 'Risk decision',
-    diffViewer: 'Diff viewer', reservedOnly: 'Reserved only, no execution', noExecutable: 'No executable actions'
+    diffViewer: 'Diff viewer', reservedOnly: 'Reserved only, no execution', noExecutable: 'No executable actions',
+    requiredApprovals: 'Required approvals', missingApprovals: 'Missing approvals',
+    eligibleActions: 'Eligible actions', blockedActions: 'Blocked actions', resumeEligibility: 'Resume eligibility'
   }
 };
 let state = { lang: 'zh', project: 0, run: 0, section: 'Overview', query: '', status: 'all', event: 0 };
@@ -740,6 +745,16 @@ function renderApproval(run) {
     <div class="section-title">${t('approval')}</div>
     <div class="run-meta">${esc(approval.mode || 'read-only approval skeleton')} · ${t('reservedOnly')} · ${t('noExecutable')}</div>
     <div class="approval-actions">${actions.map(action => `<button class="disabled-action" disabled>${esc(action)} reserved</button>`).join('')}</div>
+    <div class="section-title">${t('eligibleActions')}</div>
+    ${renderSimpleList(approval.eligible_actions || [])}
+    <div class="section-title">${t('requiredApprovals')}</div>
+    ${renderApprovalRequests(approval.required_approvals || [])}
+    <div class="section-title">${t('missingApprovals')}</div>
+    ${renderApprovalRequests(approval.missing_approvals || [])}
+    <div class="section-title">${t('blockedActions')}</div>
+    ${renderBlockedActions(approval.blocked_actions || [])}
+    <div class="section-title">${t('resumeEligibility')}</div>
+    ${renderResumeEligibility(approval.resume_eligibility || {})}
     <div class="section-title">${t('changedFiles')}</div>
     ${renderChangedFiles(run.changed_files || [])}
     <div class="section-title">${t('riskDecision')}</div>
@@ -747,6 +762,26 @@ function renderApproval(run) {
     <div class="section-title">${t('diffViewer')}</div>
     ${renderDiff(run.diff || {})}
   </div>`;
+}
+function renderSimpleList(items) {
+  if (!items.length) return `<div class="run-meta">${t('empty')}</div>`;
+  return `<div class="file-list">${items.map(item => `<div class="file-item">${esc(item)}</div>`).join('')}</div>`;
+}
+function renderApprovalRequests(requests) {
+  if (!requests.length) return `<div class="run-meta">${t('empty')}</div>`;
+  return `<div class="risk-list">${requests.map(request => `
+    <div class="risk-item">${esc(request.action)} · ${esc(request.required_approval)} · ${esc(request.risk_level)} · ${esc(request.reason)}</div>
+  `).join('')}</div>`;
+}
+function renderBlockedActions(actions) {
+  if (!actions.length) return `<div class="run-meta">${t('empty')}</div>`;
+  return `<div class="risk-list">${actions.map(action => `
+    <div class="risk-item">${esc(action.action)} · ${action.allowed ? 'allowed' : 'denied'} · ${esc(action.required_approval)} · ${esc(action.reason)}</div>
+  `).join('')}</div>`;
+}
+function renderResumeEligibility(resume) {
+  const label = resume.eligible ? 'eligible' : 'not eligible';
+  return `<div class="risk-item">${label} · ${esc(resume.reason || '')}</div>`;
 }
 function renderChangedFiles(files) {
   if (!files.length) return `<div class="run-meta">${t('empty')}</div>`;
