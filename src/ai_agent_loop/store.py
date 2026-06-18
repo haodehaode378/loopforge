@@ -429,12 +429,14 @@ def render_evidence_manifest(manifest: dict[str, object]) -> str:
     return "\n".join(
         [
             f"- status: {manifest.get('status', 'missing manifest')}",
+            f"- integrity: {manifest.get('integrity_status', manifest.get('status', 'missing manifest'))}",
             f"- file: {manifest.get('manifest_file', 'evidence_manifest.json')}",
             f"- replay_source: {manifest.get('scope_replay_source', 'events')}",
             f"- events.jsonl: {core.get('events.jsonl', '') or 'missing'}",
             f"- report.md: {core.get('report.md', '') or 'missing'}",
             f"- approvals.jsonl: {core.get('approvals.jsonl', '') or 'missing'}",
             f"- artifacts: {len(artifacts)}",
+            f"- integrity_issues: {len(manifest.get('integrity_issues', []))}",
         ]
     )
 
@@ -443,6 +445,7 @@ def render_scope_evidence(evidence: dict[str, object]) -> str:
     lines = [
         f"- scope_hash: {evidence.get('scope_hash')}",
         f"- manifest_status: {evidence.get('manifest_status')}",
+        f"- integrity_status: {evidence.get('integrity_status')}",
         f"- scope_replay_source: {evidence.get('scope_replay_source')}",
         f"- has_evidence: {evidence.get('has_evidence')}",
         f"- changed_files: {len(evidence.get('changed_files', []))}",

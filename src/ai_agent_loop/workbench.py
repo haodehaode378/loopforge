@@ -874,14 +874,17 @@ function renderScopeEvidence(evidence) {
 function renderEvidenceManifest(manifest) {
   const core = manifest.core_hashes || {};
   const artifacts = manifest.artifact_hashes || {};
+  const issues = manifest.integrity_issues || [];
   const rows = [
     ['status', manifest.status || 'missing manifest'],
+    ['integrity', manifest.integrity_status || manifest.status || 'missing manifest'],
     ['file', manifest.manifest_file || 'evidence_manifest.json'],
     ['replay_source', manifest.scope_replay_source || 'events'],
     ['events.jsonl', core['events.jsonl'] || 'missing'],
     ['report.md', core['report.md'] || 'missing'],
     ['approvals.jsonl', core['approvals.jsonl'] || 'missing'],
-    ['artifacts', Object.keys(artifacts).length]
+    ['artifacts', Object.keys(artifacts).length],
+    ['integrity_issues', issues.length]
   ];
   return `<div class="file-list">${rows.map(([key, value]) => `<div class="file-item">${esc(key)}: ${esc(value)}</div>`).join('')}</div>`;
 }

@@ -492,3 +492,28 @@ If incomplete:
 
 - Keep Loop 16 scope replay as the reliable baseline.
 - Do not add execution adapters or clickable approval buttons.
+
+## Loop 18: Manifest Integrity And Tamper Check
+
+Goal: detect when persisted run evidence no longer matches the evidence manifest.
+
+Must complete:
+
+- Verify `events.jsonl`, `report.md`, `approvals.jsonl`, diff artifacts, and command artifacts against `evidence_manifest.json`.
+- Add manifest integrity states: verified, tampered, missing manifest, and invalid manifest.
+- Record structured integrity issues with kind, path, expected hash, current hash, and reason.
+- Make scope replay prefer manifest scope only when the manifest is not tampered.
+- Show integrity status and issue count in report, CLI approval output, and Workbench.
+- Keep older runs compatible by showing missing manifest instead of failing.
+- Keep approve, resume, write, commit, push, and delete non-executable.
+
+Verification:
+
+- Unit tests cover verified manifests, core file tampering, artifact tampering, and tampered-scope fallback.
+- CLI approval output includes integrity status.
+- Workbench snapshot and browser smoke test show integrity status and issue count.
+
+If incomplete:
+
+- Keep Loop 17 manifest generation as the reliable baseline.
+- Do not add execution adapters or clickable approval buttons.

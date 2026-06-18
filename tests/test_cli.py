@@ -252,6 +252,7 @@ class CliArgTests(unittest.TestCase):
             output = stdout.getvalue()
             self.assertIn("evidence_manifest:", output)
             self.assertIn('"status": "present"', output)
+            self.assertIn('"integrity_status": "verified"', output)
             self.assertIn('"scope_replay_source": "manifest"', output)
             self.assertIn("scope_evidence:", output)
             self.assertIn("scope_replay:", output)
