@@ -15,6 +15,7 @@ from ai_agent_loop.evidence import (
     scope_from_manifest_or_events,
     write_evidence_manifest,
 )
+from ai_agent_loop.execution_gate import evaluate_execution_gates
 from ai_agent_loop.critique import render_critique
 from ai_agent_loop.ledger import (
     append_approval_ledger,
@@ -309,6 +310,7 @@ def show_approval(store: str, project: str, run_id: str) -> None:
     requests = approval_requests_with_ids(run_id, contract_model, scope)
     ledger = summarize_ledger(read_approval_ledger(run_store.run_dir(run_id)), scope)
     evidence = scope_evidence_from_manifest_or_events(manifest, events)
+    gates = evaluate_execution_gates(contract, ledger, manifest)
     print(f"run_id: {run_id}")
     print(f"mode: {contract['mode']}")
     print("evidence_manifest:")
@@ -341,6 +343,8 @@ def show_approval(store: str, project: str, run_id: str) -> None:
     print_json_lines(ledger["scope_replay"])
     print("execution_ready_approvals:")
     print_json_lines(ledger["execution_ready_approvals"])
+    print("execution_gate:")
+    print_json_lines(gates)
 
 
 def record_approval_decision(args: argparse.Namespace) -> None:

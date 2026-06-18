@@ -12,6 +12,7 @@ from ai_agent_loop.evidence import (
     scope_from_manifest_or_events,
     write_evidence_manifest,
 )
+from ai_agent_loop.execution_gate import evaluate_execution_gates
 from ai_agent_loop.goal import Goal
 from ai_agent_loop.critique import render_critique
 from ai_agent_loop.ledger import read_approval_ledger, summarize_ledger
@@ -384,6 +385,7 @@ def render_approval_readiness(
     scope = scope_from_manifest_or_events(evidence_manifest, events)
     evidence = scope_evidence_from_manifest_or_events(evidence_manifest, events)
     ledger = summarize_ledger(ledger_entries or [], scope)
+    gates = evaluate_execution_gates(contract_data, ledger, evidence_manifest)
     changed_files = collect_changed_files(events)
     diff_events = [
         event for event in events
@@ -413,10 +415,26 @@ def render_approval_readiness(
             "Conflict approvals:\n" + render_ledger_entries(ledger["conflict_approvals"]),
             "Scope replay:\n" + render_scope_replay(ledger["scope_replay"]),
             "Execution readiness:\n" + render_execution_ready(ledger["execution_ready_approvals"]),
+            "Execution gate:\n" + render_execution_gate(gates),
             "Changed files:\n" + render_changed_files(changed_files),
             "Diff evidence:\n" + (f"- {len(diff_events)} diff artifact(s)" if diff_events else "- none"),
         ]
     )
+
+
+def render_execution_gate(gates: dict[str, object]) -> str:
+    records = gates.get("gates", [])
+    if not isinstance(records, list) or not records:
+        return "- none"
+    lines = [f"- executable_actions: {len(gates.get('executable_actions', []))}"]
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        state = "ready" if record.get("ready_for_execution_adapter") else "blocked"
+        lines.append(
+            f"- {record.get('action')}: {state}; executable={record.get('executable')} - {record.get('reason')}"
+        )
+    return "\n".join(lines)
 
 
 def render_evidence_manifest(manifest: dict[str, object]) -> str:

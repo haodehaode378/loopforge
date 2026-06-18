@@ -517,3 +517,26 @@ If incomplete:
 
 - Keep Loop 17 manifest generation as the reliable baseline.
 - Do not add execution adapters or clickable approval buttons.
+
+## Loop 19: Execution Gate Readiness
+
+Goal: centralize the future execution preflight decision before any reserved action can run.
+
+Must complete:
+
+- Add a pure read-only execution gate over approval contract, approval ledger replay, and evidence manifest integrity.
+- Evaluate approve, resume, write, commit, push, and delete readiness.
+- Gate requires verified manifest integrity, no denied/conflict/revoked/expired approvals, no missing approval for the action, and at least one active matched approval for write-like actions.
+- Keep `executable_actions` empty and every button disabled.
+- Show gate readiness in report, CLI approval output, and Workbench.
+
+Verification:
+
+- Unit tests cover ready-but-not-executable, tampered manifest blocking, denied approval blocking, and missing approval blocking.
+- CLI approval output includes execution gate records.
+- Workbench snapshot and browser smoke test show execution gate readiness.
+
+If incomplete:
+
+- Keep Loop 18 manifest integrity as the reliable baseline.
+- Do not add execution adapters or clickable approval buttons.

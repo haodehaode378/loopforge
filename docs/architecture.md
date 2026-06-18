@@ -25,6 +25,7 @@ src/ai_agent_loop/
 +-- cli.py      CLI entry point
 +-- critique.py Dynamic run critique
 +-- evidence.py Evidence manifest hashes for replay
++-- execution_gate.py Read-only reserved action readiness
 +-- goal.py     Goal model
 +-- loop.py     Loop primitives
 +-- multi_agent.py Read-only parent/child run orchestration
@@ -92,6 +93,7 @@ Current workbench behavior:
 - `loopforge approval decide <run_id> ...` only appends a ledger decision or denial after request id and scope validation; it does not execute reserved actions.
 - Approval ledger entries carry scope evidence, replay status, and unsigned audit signature placeholders. Only active approvals with matched scope replay are marked execution-ready, but no execution adapter consumes them yet.
 - `evidence_manifest.json` records hashes for core run files and referenced artifacts. Scope replay prefers manifest scope when present and verified, falls back to event-derived scope for older runs with a visible `missing manifest` status, and reports `tampered` when current evidence hashes differ from the manifest.
+- Execution gate readiness is a pure read-only calculation over approval contract, ledger replay, and manifest integrity. It can mark a reserved action ready for a future adapter, but executable actions remain empty.
 - The UI does not approve, resume, write, call models, log in, or sync.
 
 ## Run Store

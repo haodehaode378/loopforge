@@ -13,6 +13,7 @@ from ai_agent_loop.evidence import (
     scope_evidence_from_manifest_or_events,
     scope_from_manifest_or_events,
 )
+from ai_agent_loop.execution_gate import evaluate_execution_gates
 from ai_agent_loop.ledger import read_approval_ledger, summarize_ledger
 from ai_agent_loop.project import ProjectRegistry
 from ai_agent_loop.store import (
@@ -266,9 +267,11 @@ def build_approval_readiness(
     }
     scope = scope_from_manifest_or_events(evidence_manifest, events)
     ledger = summarize_ledger(ledger_entries or [], scope)
+    gates = evaluate_execution_gates(contract, ledger, evidence_manifest)
     return {
         **contract,
         "ledger": ledger,
+        "execution_gate": gates,
         "scope_evidence": scope_evidence_from_manifest_or_events(evidence_manifest, events),
         "evidence_manifest": evidence_manifest,
         "status": "reserved",
@@ -632,7 +635,7 @@ const labels = {
     ledger: '审批账本', activeApprovals: '有效审批', expiredApprovals: '过期审批',
     revokedApprovals: '撤销审批', deniedApprovals: '拒绝审批', conflictApprovals: '冲突审批',
     scopeEvidence: 'Scope evidence', scopeReplay: 'Scope replay', executionReady: 'Execution ready',
-    evidenceManifest: 'Evidence manifest'
+    evidenceManifest: 'Evidence manifest', executionGate: 'Execution gate'
   },
   en: {
     projects: 'Projects', runs: 'Run history', timeline: 'Event timeline', detail: 'Run detail',
@@ -647,7 +650,7 @@ const labels = {
     ledger: 'Approval ledger', activeApprovals: 'Active approvals', expiredApprovals: 'Expired approvals',
     revokedApprovals: 'Revoked approvals', deniedApprovals: 'Denied approvals', conflictApprovals: 'Conflict approvals',
     scopeEvidence: 'Scope evidence', scopeReplay: 'Scope replay', executionReady: 'Execution ready',
-    evidenceManifest: 'Evidence manifest'
+    evidenceManifest: 'Evidence manifest', executionGate: 'Execution gate'
   }
 };
 let state = { lang: 'zh', project: 0, run: 0, section: 'Overview', query: '', status: 'all', event: 0 };
@@ -803,6 +806,8 @@ function renderApproval(run) {
     ${renderScopeEvidence(approval.scope_evidence || {})}
     <div class="section-title">${t('ledger')}</div>
     ${renderLedger(approval.ledger || run.approval_ledger || {})}
+    <div class="section-title">${t('executionGate')}</div>
+    ${renderExecutionGate(approval.execution_gate || {})}
     <div class="section-title">${t('changedFiles')}</div>
     ${renderChangedFiles(run.changed_files || [])}
     <div class="section-title">${t('riskDecision')}</div>
@@ -897,6 +902,15 @@ function renderScopeReplay(records) {
       <div class="run-meta">signature: ${esc(record.signature_status || 'unsigned')} · ${esc(record.actor || '')}</div>
     </div>`;
   }).join('');
+}
+function renderExecutionGate(gate) {
+  const gates = gate.gates || [];
+  if (!gates.length) return `<div class="run-meta">${t('empty')}</div>`;
+  return `<div class="risk-list">${gates.map(item => `
+    <div class="risk-item">
+      ${esc(item.action)} · ${item.ready_for_execution_adapter ? 'ready' : 'blocked'} · executable: ${esc(item.executable)}
+      <div class="run-meta">${esc(item.reason || '')}</div>
+    </div>`).join('')}</div>`;
 }
 function renderChangedFiles(files) {
   if (!files.length) return `<div class="run-meta">${t('empty')}</div>`;

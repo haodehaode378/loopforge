@@ -257,6 +257,8 @@ class CliArgTests(unittest.TestCase):
             self.assertIn("scope_evidence:", output)
             self.assertIn("scope_replay:", output)
             self.assertIn("execution_ready_approvals:", output)
+            self.assertIn("execution_gate:", output)
+            self.assertIn('"executable": false', output)
             self.assertIn('"replay_status": "matched"', output)
             self.assertIn('"signature_status": "unsigned"', output)
 
