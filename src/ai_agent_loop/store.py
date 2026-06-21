@@ -408,6 +408,7 @@ def render_approval_readiness(
             "Evidence manifest:\n" + render_evidence_manifest(evidence_manifest),
             "Scope evidence:\n" + render_scope_evidence(evidence),
             "Ledger status:\n" + render_ledger_status(ledger),
+            "Ledger integrity:\n" + render_ledger_integrity(ledger.get("integrity", {})),
             "Active approvals:\n" + render_ledger_entries(ledger["active_approvals"]),
             "Expired approvals:\n" + render_ledger_entries(ledger["expired_approvals"]),
             "Revoked approvals:\n" + render_ledger_entries(ledger["revoked_approvals"]),
@@ -529,6 +530,50 @@ def render_ledger_status(ledger: dict[str, object]) -> str:
         f"- {ledger.get('status')} "
         f"({ledger.get('entry_count')} entries in {ledger.get('ledger_file')})"
     )
+
+
+def render_ledger_integrity(integrity: object) -> str:
+    if not isinstance(integrity, dict) or not integrity:
+        return "- none"
+    counts = integrity.get("status_counts", {})
+    if not isinstance(counts, dict):
+        counts = {}
+    latest = integrity.get("latest_entry", {})
+    if not isinstance(latest, dict):
+        latest = {}
+    lines = [
+        "- counts: "
+        + ", ".join(
+            f"{name}={counts.get(name, 0)}"
+            for name in ("active", "expired", "revoked", "denied", "conflict", "inactive")
+        ),
+        f"- execution_ready_count: {integrity.get('execution_ready_count', 0)}",
+        "- latest: "
+        + (
+            f"{latest.get('decision_id')} {latest.get('entry_type')} {latest.get('status')} "
+            f"by {latest.get('actor')} - {latest.get('reason')}"
+            if latest else "none"
+        ),
+    ]
+    chains = integrity.get("revocation_chains", [])
+    if isinstance(chains, list) and chains:
+        lines.append("  revocation_chains:")
+        for chain in chains:
+            if isinstance(chain, dict):
+                lines.append(
+                    f"  - {chain.get('decision_id')}: {chain.get('original_decision')} "
+                    f"by {chain.get('original_actor')} revoked by {chain.get('revoked_by')} "
+                    f"- {chain.get('reason')}"
+                )
+    reasons = integrity.get("execution_not_ready_reasons", [])
+    if isinstance(reasons, list) and reasons:
+        lines.append("  execution_not_ready:")
+        for reason in reasons:
+            if isinstance(reason, dict):
+                lines.append(
+                    f"  - {reason.get('decision_id')}: {reason.get('reason')}"
+                )
+    return "\n".join(lines)
 
 
 def render_ledger_entries(entries: object) -> str:

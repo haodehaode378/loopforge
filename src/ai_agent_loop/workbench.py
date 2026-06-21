@@ -641,7 +641,8 @@ const labels = {
     ledger: '审批账本', activeApprovals: '有效审批', expiredApprovals: '过期审批',
     revokedApprovals: '撤销审批', deniedApprovals: '拒绝审批', conflictApprovals: '冲突审批',
     scopeEvidence: 'Scope evidence', scopeReplay: 'Scope replay', executionReady: 'Execution ready',
-    evidenceManifest: 'Evidence manifest', executionGate: 'Execution gate', gateAudit: 'Gate audit'
+    evidenceManifest: 'Evidence manifest', executionGate: 'Execution gate', gateAudit: 'Gate audit',
+    ledgerIntegrity: 'Ledger integrity'
   },
   en: {
     projects: 'Projects', runs: 'Run history', timeline: 'Event timeline', detail: 'Run detail',
@@ -656,7 +657,8 @@ const labels = {
     ledger: 'Approval ledger', activeApprovals: 'Active approvals', expiredApprovals: 'Expired approvals',
     revokedApprovals: 'Revoked approvals', deniedApprovals: 'Denied approvals', conflictApprovals: 'Conflict approvals',
     scopeEvidence: 'Scope evidence', scopeReplay: 'Scope replay', executionReady: 'Execution ready',
-    evidenceManifest: 'Evidence manifest', executionGate: 'Execution gate', gateAudit: 'Gate audit'
+    evidenceManifest: 'Evidence manifest', executionGate: 'Execution gate', gateAudit: 'Gate audit',
+    ledgerIntegrity: 'Ledger integrity'
   }
 };
 let state = { lang: 'zh', project: 0, run: 0, section: 'Overview', query: '', status: 'all', event: 0 };
@@ -848,6 +850,8 @@ function renderLedger(ledger) {
   const summary = `${esc(ledger.status || 'empty')} · ${esc(ledger.entry_count || 0)} entries · ${esc(ledger.ledger_file || 'approvals.jsonl')}`;
   return `<div class="ledger-timeline">
     <div class="ledger-item">${summary}</div>
+    <div class="section-title">${t('ledgerIntegrity')}</div>
+    ${renderLedgerIntegrity(ledger.integrity || {})}
     <div class="section-title">${t('activeApprovals')}</div>
     ${renderLedgerEntries(ledger.active_approvals || [])}
     <div class="section-title">${t('expiredApprovals')}</div>
@@ -862,6 +866,27 @@ function renderLedger(ledger) {
     ${renderScopeReplay(ledger.scope_replay || [])}
     <div class="section-title">${t('executionReady')}</div>
     ${renderLedgerEntries(ledger.execution_ready_approvals || [])}
+  </div>`;
+}
+function renderLedgerIntegrity(integrity) {
+  const counts = integrity.status_counts || {};
+  const latest = integrity.latest_entry || {};
+  const chains = integrity.revocation_chains || [];
+  const reasons = integrity.execution_not_ready_reasons || [];
+  const countRow = ['active', 'expired', 'revoked', 'denied', 'conflict', 'inactive']
+    .map(name => `${name}: ${counts[name] || 0}`)
+    .join(' / ');
+  const latestRow = latest.decision_id
+    ? `${latest.decision_id} / ${latest.entry_type || ''} / ${latest.status || ''} / ${latest.actor || ''}`
+    : t('empty');
+  return `<div class="ledger-item">
+    <div>${esc(countRow)}</div>
+    <div class="run-meta">execution_ready_count: ${esc(integrity.execution_ready_count || 0)}</div>
+    <div class="run-meta">latest_entry: ${esc(latestRow)}</div>
+    <div class="run-meta">revocation_chains: ${esc(chains.length)}</div>
+    ${chains.map(chain => `<div class="run-meta">${esc(chain.decision_id)} revoked by ${esc(chain.revoked_by)} - ${esc(chain.reason || '')}</div>`).join('')}
+    <div class="run-meta">execution_not_ready: ${esc(reasons.length)}</div>
+    ${reasons.map(reason => `<div class="run-meta">${esc(reason.decision_id)} - ${esc(reason.reason || '')}</div>`).join('')}
   </div>`;
 }
 function renderLedgerEntries(entries) {

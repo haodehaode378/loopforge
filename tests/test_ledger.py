@@ -82,6 +82,16 @@ class ApprovalLedgerTests(unittest.TestCase):
         self.assertEqual(len(summary["active_approvals"]), 0)
         self.assertEqual(len(summary["expired_approvals"]), 1)
         self.assertEqual(len(summary["revoked_approvals"]), 2)
+        integrity = summary["integrity"]
+        self.assertEqual(integrity["status_counts"]["revoked"], 2)
+        self.assertEqual(integrity["status_counts"]["expired"], 1)
+        self.assertEqual(integrity["latest_entry"]["entry_type"], "revocation")
+        self.assertEqual(integrity["revocation_chains"][0]["decision_id"], active["decision_id"])
+        self.assertEqual(integrity["revocation_chains"][0]["revoked_by"], "alice")
+        self.assertIn(
+            "ledger status is revoked",
+            {reason["reason"] for reason in integrity["execution_not_ready_reasons"]},
+        )
 
     def test_ledger_status_groups_denied_and_conflict_entries(self) -> None:
         request = evaluate_approval_contract(

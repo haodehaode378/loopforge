@@ -106,6 +106,12 @@ class WorkbenchTests(unittest.TestCase):
             )
             self.assertTrue(done_run["approval"]["ledger"]["scope_replay"][0]["signature_payload_hash"])
             self.assertTrue(done_run["approval"]["ledger"]["execution_ready_approvals"])
+            self.assertEqual(done_run["approval"]["ledger"]["integrity"]["status_counts"]["active"], 1)
+            self.assertEqual(done_run["approval"]["ledger"]["integrity"]["execution_ready_count"], 1)
+            self.assertEqual(
+                done_run["approval"]["ledger"]["integrity"]["latest_entry"]["decision_id"],
+                ledger_entry["decision_id"],
+            )
             self.assertTrue(done_run["approval"]["scope_evidence"]["has_evidence"])
             self.assertEqual(done_run["approval"]["scope_evidence"]["manifest_status"], "present")
             self.assertEqual(done_run["approval"]["scope_evidence"]["scope_replay_source"], "manifest")
@@ -133,6 +139,7 @@ class WorkbenchTests(unittest.TestCase):
             self.assertIn("Blocked actions", diff_data["sections"]["Approval Readiness"])
             self.assertIn("Resume eligibility", diff_data["sections"]["Approval Readiness"])
             self.assertIn("Ledger status", diff_data["sections"]["Approval Readiness"])
+            self.assertIn("Ledger integrity", diff_data["sections"]["Approval Readiness"])
             self.assertIn("Scope replay", diff_data["sections"]["Approval Readiness"])
             self.assertIn("Execution readiness", diff_data["sections"]["Approval Readiness"])
             self.assertIn("Execution gate", diff_data["sections"]["Approval Readiness"])
@@ -165,6 +172,10 @@ class WorkbenchTests(unittest.TestCase):
             self.assertIn("Execution ready", html)
             self.assertIn("actor_id", html)
             self.assertIn("signature_payload_hash", html)
+            self.assertIn("Ledger integrity", html)
+            self.assertIn("execution_ready_count", html)
+            self.assertIn("latest_entry", html)
+            self.assertIn("revocation_chains", html)
             self.assertIn("placeholder-local-audit-v1", html)
             self.assertIn("Execution gate", html)
             self.assertIn("Gate audit", html)

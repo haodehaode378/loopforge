@@ -383,6 +383,7 @@ class CliArgTests(unittest.TestCase):
             self.assertIn("revocation_recorded: true", output)
             self.assertIn("No approval, resume, write, commit, push, or delete action was executed.", output)
             self.assertIn("Revoked approvals", run_store.read_report(result.run_id))
+            self.assertIn("Ledger integrity", run_store.read_report(result.run_id))
             self.assertIn(str(decision_id), run_store.read_report(result.run_id))
 
             duplicate = io.StringIO()

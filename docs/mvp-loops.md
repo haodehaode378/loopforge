@@ -638,3 +638,27 @@ If incomplete:
 
 - Keep Loop 22 actor signature skeleton as the reliable baseline.
 - Do not add resume/write/commit/push/delete execution adapters.
+
+## Loop 24: Approval Ledger Integrity View
+
+Goal: make approval ledger state easier to inspect before any execution adapter exists.
+
+Must complete:
+
+- Add a ledger integrity summary with counts for active, expired, revoked, denied, conflict, and inactive entries.
+- Show the latest ledger entry.
+- Show revocation chains from original approval decision to revocation entry.
+- Explain why each non-ready ledger entry is not execution-ready.
+- Show the integrity view in reports, CLI-generated approval readiness, and the Workbench.
+- Keep approve, resume, write, commit, push, and delete non-executable.
+
+Verification:
+
+- Unit tests cover integrity counts, latest entry, revocation chains, and not-ready reasons.
+- CLI revocation flow updates the report with ledger integrity.
+- Workbench snapshot and smoke checks show ledger integrity fields.
+
+If incomplete:
+
+- Keep Loop 23 approval revocation as the reliable baseline.
+- Do not add resume/write/commit/push/delete execution adapters.

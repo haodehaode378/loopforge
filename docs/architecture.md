@@ -217,6 +217,7 @@ Current policy behavior:
 - Three consecutive failed shell executions append a blocked event.
 - `inspect` and `report` show the blocked reason.
 - `resume` is reserved as a CLI entry point but does not yet continue execution.
+- Approval ledger reports include integrity counts, latest entry, revocation chains, and not-ready reasons for audit review.
 
 High-risk examples:
 

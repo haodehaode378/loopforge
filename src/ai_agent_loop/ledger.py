@@ -191,9 +191,11 @@ def summarize_ledger(
     denied = [entry for entry in entries if entry.get("status") == "denied"]
     conflicts = [entry for entry in entries if entry.get("status") == "conflict"]
     replay_records = [ledger_replay_record(entry) for entry in entries]
+    integrity = ledger_integrity_summary(entries, replay_records)
     return {
         "ledger_file": LEDGER_FILENAME,
         "entry_count": len(entries),
+        "integrity": integrity,
         "active_approvals": active,
         "expired_approvals": expired,
         "revoked_approvals": revoked,
@@ -207,6 +209,104 @@ def summarize_ledger(
         ],
         "status": "present" if entries else "empty",
     }
+
+
+def ledger_integrity_summary(
+    entries: list[dict[str, object]],
+    replay_records: list[dict[str, object]],
+) -> dict[str, object]:
+    status_counts = {
+        "active": 0,
+        "expired": 0,
+        "revoked": 0,
+        "denied": 0,
+        "conflict": 0,
+        "inactive": 0,
+    }
+    for entry in entries:
+        status = str(entry.get("status") or "inactive")
+        status_counts[status] = status_counts.get(status, 0) + 1
+    latest = latest_ledger_entry(entries)
+    revocation_chains = build_revocation_chains(entries)
+    ready_false_reasons = execution_not_ready_reasons(replay_records)
+    return {
+        "status_counts": status_counts,
+        "latest_entry": ledger_integrity_entry(latest) if latest else {},
+        "revocation_chains": revocation_chains,
+        "execution_not_ready_reasons": ready_false_reasons,
+        "execution_ready_count": sum(1 for record in replay_records if record.get("execution_ready")),
+    }
+
+
+def latest_ledger_entry(entries: list[dict[str, object]]) -> dict[str, object] | None:
+    if not entries:
+        return None
+    return sorted(entries, key=lambda entry: str(entry.get("created_at") or ""))[-1]
+
+
+def ledger_integrity_entry(entry: dict[str, object]) -> dict[str, object]:
+    return {
+        "decision_id": entry.get("decision_id", ""),
+        "entry_type": entry.get("entry_type", ""),
+        "decision": entry.get("decision", ""),
+        "status": entry.get("status", ""),
+        "actor": entry.get("actor", ""),
+        "created_at": entry.get("created_at", ""),
+        "reason": entry.get("reason", ""),
+    }
+
+
+def build_revocation_chains(entries: list[dict[str, object]]) -> list[dict[str, object]]:
+    decisions = {
+        str(entry.get("decision_id")): entry
+        for entry in entries
+        if entry.get("entry_type") != "revocation" and entry.get("decision_id")
+    }
+    chains = []
+    for entry in entries:
+        if entry.get("entry_type") != "revocation":
+            continue
+        decision_id_value = str(entry.get("decision_id") or "")
+        original = decisions.get(decision_id_value, {})
+        chains.append(
+            {
+                "decision_id": decision_id_value,
+                "original_decision": original.get("decision", ""),
+                "original_actor": original.get("actor", ""),
+                "revoked_by": entry.get("actor", ""),
+                "revoked_at": entry.get("created_at", ""),
+                "reason": entry.get("reason", ""),
+            }
+        )
+    return chains
+
+
+def execution_not_ready_reasons(records: list[dict[str, object]]) -> list[dict[str, object]]:
+    reasons = []
+    for record in records:
+        if record.get("execution_ready"):
+            continue
+        reasons.append(
+            {
+                "decision_id": record.get("decision_id", ""),
+                "status": record.get("status", ""),
+                "replay_status": record.get("replay_status", ""),
+                "reason": execution_not_ready_reason(record),
+            }
+        )
+    return reasons
+
+
+def execution_not_ready_reason(record: dict[str, object]) -> str:
+    status = str(record.get("status") or "")
+    replay = str(record.get("replay_status") or "")
+    if status in {"expired", "revoked", "denied", "conflict"}:
+        return f"ledger status is {status}"
+    if replay != "matched":
+        return f"scope replay is {replay or 'unknown'}"
+    if record.get("signature_status") == "invalid":
+        return "signature status is invalid"
+    return "entry is not active and matched"
 
 
 def replay_status(
