@@ -1,4 +1,5 @@
 import io
+import subprocess
 from contextlib import redirect_stdout
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -96,13 +97,59 @@ class CliArgTests(unittest.TestCase):
         args = build_parser().parse_args(normalize_argv(["critique", "run-1"]))
 
         self.assertEqual(args.command, "critique")
+        self.assertEqual(args.critique_command, "show")
         self.assertEqual(args.run_id, "run-1")
+
+    def test_critique_changes_command_parses_summaries(self) -> None:
+        args = build_parser().parse_args(
+            normalize_argv(["critique", "changes", "--tests", "79 tests OK", "--risk", "reserved no execution"])
+        )
+
+        self.assertEqual(args.command, "critique")
+        self.assertEqual(args.critique_command, "changes")
+        self.assertEqual(args.tests, "79 tests OK")
+        self.assertEqual(args.risk, "reserved no execution")
 
     def test_execution_command_parses_run_id(self) -> None:
         args = build_parser().parse_args(normalize_argv(["execution", "run-1"]))
 
         self.assertEqual(args.command, "execution")
         self.assertEqual(args.run_id, "run-1")
+
+    def test_critique_changes_reads_current_git_diff(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            project = Path(temp_dir) / "project"
+            project.mkdir()
+            subprocess.run(["git", "init"], cwd=project, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=project, check=True)
+            subprocess.run(["git", "config", "user.name", "LoopForge Test"], cwd=project, check=True)
+            (project / "app.py").write_text("print('hi')\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=project, check=True)
+            subprocess.run(["git", "commit", "-m", "initial"], cwd=project, check=True, capture_output=True)
+            (project / "app.py").write_text("print('changed')\n", encoding="utf-8")
+
+            stdout = io.StringIO()
+            with redirect_stdout(stdout):
+                main(
+                    [
+                        "--project",
+                        str(project),
+                        "critique",
+                        "changes",
+                        "--tests",
+                        "79 tests OK",
+                        "--risk",
+                        "reserved no execution",
+                        "--smoke",
+                        "Chrome smoke OK",
+                    ]
+                )
+
+            output = stdout.getvalue()
+            self.assertIn("### Scope control", output)
+            self.assertIn("public changed file", output)
+            self.assertIn("Verification is strong", output)
+            self.assertIn("Risk is controlled", output)
 
     def test_approval_command_parses_run_id(self) -> None:
         args = build_parser().parse_args(normalize_argv(["approval", "run-1"]))

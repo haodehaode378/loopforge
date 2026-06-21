@@ -686,3 +686,27 @@ If incomplete:
 
 - Keep Loop 24 ledger integrity as the reliable baseline.
 - Do not add adapter execution, approval buttons, resume, write, commit, push, or delete behavior.
+
+## Loop 26: Change-set Critique
+
+Goal: upgrade sharp review from run-event critique to change-set critique that can review the current code diff.
+
+Must complete:
+
+- Add change-set critique sections: Scope control, Product alignment, Verification quality, Risk review, Maintainability, and Next action.
+- Read current git changed files and diff for `loopforge critique changes`.
+- Accept test, risk, and smoke summaries as explicit CLI evidence.
+- Add `Change-set Critique` to reports and the Workbench.
+- Keep legacy `loopforge critique <run_id>` behavior working through a compatibility path.
+- Keep approve, resume, write, commit, push, and delete non-executable.
+
+Verification:
+
+- Unit tests cover normal change-set critique and private-file risk detection.
+- CLI tests cover `critique changes` against a temporary git diff.
+- Report and Workbench tests show the new `Change-set Critique` section.
+
+If incomplete:
+
+- Keep Loop 25 execution adapter contract as the reliable baseline.
+- Do not use change-set critique as an automatic approval, resume, or execution gate.

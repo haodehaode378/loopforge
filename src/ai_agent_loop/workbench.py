@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
@@ -21,18 +22,20 @@ from ai_agent_loop.store import (
     find_blocked_reason,
     ensure_summary_headings,
     infer_status,
+    render_change_set_critique_for_events,
     render_approval_readiness,
     render_automation_summary,
     render_git_summary,
     render_multi_agent_summary,
     replace_approval_readiness,
+    replace_change_set_critique,
     replace_automation_summary,
     replace_git_summary,
     replace_multi_agent_summary,
     replace_sharp_review,
     replace_status_line,
 )
-from ai_agent_loop.critique import render_critique
+from ai_agent_loop.critique import changed_files_from_diff_name_output, render_change_set_critique, render_critique
 
 
 def build_workbench_snapshot(root: Path | str = ".agent") -> dict[str, object]:
@@ -74,7 +77,11 @@ def build_workbench_snapshot(root: Path | str = ".agent") -> dict[str, object]:
             }
         )
     totals["projects"] = len(projects)
-    return {"totals": totals, "projects": projects}
+    return {
+        "totals": totals,
+        "projects": projects,
+        "change_set_critique": build_current_change_set_critique(projects),
+    }
 
 
 def read_project_runs(project_dir: Path) -> list[dict[str, object]]:
@@ -358,11 +365,37 @@ def read_dynamic_report(
     report = replace_git_summary(report, render_git_summary(events))
     report = replace_multi_agent_summary(report, render_multi_agent_summary(events))
     report = replace_approval_readiness(report, render_approval_readiness(events, ledger_entries or [], manifest))
+    report = replace_change_set_critique(report, render_change_set_critique_for_events(events))
     report = replace_sharp_review(report, render_critique(events))
     blocked_reason = find_blocked_reason(events)
     if blocked_reason and "## Blocked Reason" not in report:
         report += f"\n## Blocked Reason\n\n{blocked_reason}\n"
     return report
+
+
+def build_current_change_set_critique(projects: list[dict[str, object]]) -> dict[str, object]:
+    project_path = str(projects[0].get("path") or ".") if projects else "."
+    changed = git_output(project_path, ["diff", "--name-only"])
+    diff = git_output(project_path, ["diff", "--", "."])
+    changed_files = changed_files_from_diff_name_output(changed)
+    return {
+        "mode": "current workspace snapshot",
+        "changed_files": changed_files,
+        "body": render_change_set_critique(changed_files, diff_text=diff),
+    }
+
+
+def git_output(project_path: str, args: list[str]) -> str:
+    result = subprocess.run(
+        ["git", *args],
+        cwd=project_path,
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    return result.stdout
 
 
 def extract_sections(markdown: str) -> dict[str, str]:
@@ -713,7 +746,8 @@ function renderProjects() {
 }
 function renderRuns(current) {
   const list = runs();
-  return `
+    return `
+    ${renderChangeSetCritique(snapshot.change_set_critique || {})}
     ${renderCharts(project().analytics || {})}
     <div class="toolbar">
       <input id="run-search" name="run-search" class="search" placeholder="${t('search')}" value="${esc(state.query)}" oninput="setQuery(this.value)">
@@ -732,6 +766,13 @@ function renderRuns(current) {
       </button>`).join('') : `<div class="empty">${t('empty')}</div>`}
     <div class="section-title">${t('timeline')}</div>
     ${current ? renderTimeline(current) : ''}`;
+}
+function renderChangeSetCritique(critique) {
+  if (!critique.body) return '';
+  return `<div class="chart-panel">
+    <div class="section-title">Change-set Critique</div>
+    <div class="report">${esc(critique.body)}</div>
+  </div>`;
 }
 function renderCharts(analytics) {
   return `<div class="chart-panel">

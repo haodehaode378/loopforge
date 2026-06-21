@@ -15,7 +15,7 @@ from ai_agent_loop.evidence import (
 from ai_agent_loop.execution_adapter import evaluate_execution_adapter_contract
 from ai_agent_loop.execution_gate import collect_execution_gate_events, evaluate_execution_gates
 from ai_agent_loop.goal import Goal
-from ai_agent_loop.critique import render_critique
+from ai_agent_loop.critique import render_change_set_critique, render_critique
 from ai_agent_loop.ledger import read_approval_ledger, summarize_ledger
 from ai_agent_loop.loop import AgentStep, LoopResult
 from ai_agent_loop.project import Project, ProjectRegistry
@@ -119,6 +119,7 @@ class RunStore:
         ledger = read_approval_ledger(self.run_dir(run_id))
         manifest = read_evidence_manifest(self.run_dir(run_id))
         report = replace_approval_readiness(report, render_approval_readiness(events, ledger, manifest))
+        report = replace_change_set_critique(report, render_change_set_critique_for_events(events))
         report = replace_sharp_review(report, render_critique(events))
         blocked_reason = find_blocked_reason(events)
         if blocked_reason and "## Blocked Reason" not in report:
@@ -185,6 +186,7 @@ def render_report(result: LoopResult) -> str:
         f"- {step.name}: {step.detail}" for step in result.steps
     )
     critique = render_critique([step.to_dict() for step in result.steps])
+    change_critique = render_change_set_critique_for_events([step.to_dict() for step in result.steps])
     metadata = render_metadata(result.metadata)
 
     return (
@@ -201,6 +203,7 @@ def render_report(result: LoopResult) -> str:
         f"## Git Summary\n\nNo git actions recorded.\n\n"
         f"## Multi-Agent Summary\n\nNo multi-agent coordination recorded.\n\n"
         f"## Approval Readiness\n\n{render_approval_readiness([step.to_dict() for step in result.steps])}\n\n"
+        f"## Change-set Critique\n\n{change_critique}\n\n"
         f"## Sharp Review\n\n{critique}\n\n"
         f"## Loop Trace\n\n{steps}\n"
     )
@@ -249,6 +252,24 @@ def render_automation_summary(events: list[dict[str, object]]) -> str:
             "Risks:\n" + render_event_risks(risk_events),
             "Next steps:\n" + render_event_details(next_steps),
         ]
+    )
+
+
+def render_change_set_critique_for_events(events: list[dict[str, object]]) -> str:
+    changed_files = collect_changed_files(events)
+    test_summary = render_event_details(
+        [event for event in events if event.get("name") in {"verify", "automation.verify"}]
+    )
+    risk_summary = render_event_risks([event for event in events if event.get("risk")])
+    smoke_summary = "snapshot evidence present" if any(
+        event.get("name") in {"workbench.snapshot", "execution.gate.evaluated"}
+        for event in events
+    ) else ""
+    return render_change_set_critique(
+        changed_files,
+        test_summary=test_summary,
+        risk_summary=risk_summary,
+        smoke_summary=smoke_summary,
     )
 
 
@@ -752,6 +773,8 @@ def ensure_summary_headings(report: str) -> str:
         additions.append("## Multi-Agent Summary\n\nNo multi-agent coordination recorded.\n")
     if "## Approval Readiness" not in report:
         additions.append("## Approval Readiness\n\n" + render_approval_readiness([]) + "\n")
+    if "## Change-set Critique" not in report:
+        additions.append("## Change-set Critique\n\n" + render_change_set_critique_for_events([]) + "\n")
     if not additions:
         return report
     before, after = report.split("## Sharp Review", 1)
@@ -767,6 +790,16 @@ def replace_sharp_review(report: str, critique: str) -> str:
     before, rest = report.split(heading, 1)
     _, after = rest.split(next_heading, 1)
     return f"{before}{heading}\n\n{critique}\n{next_heading}{after}"
+
+
+def replace_change_set_critique(report: str, critique: str) -> str:
+    heading = "## Change-set Critique"
+    next_heading = "\n## Sharp Review"
+    if heading not in report or next_heading not in report:
+        return report
+    before, rest = report.split(heading, 1)
+    _, after = rest.split(next_heading, 1)
+    return f"{before}{heading}\n\n{critique}\n\n{next_heading}{after}"
 
 
 def replace_automation_summary(report: str, summary: str) -> str:
@@ -801,7 +834,7 @@ def replace_multi_agent_summary(report: str, summary: str) -> str:
 
 def replace_approval_readiness(report: str, summary: str) -> str:
     heading = "## Approval Readiness"
-    next_heading = "\n## Sharp Review"
+    next_heading = "\n## Change-set Critique"
     if heading not in report or next_heading not in report:
         return report
     before, rest = report.split(heading, 1)

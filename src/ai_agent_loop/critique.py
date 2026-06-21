@@ -2,12 +2,23 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 
 CRITIQUE_SECTIONS = [
     "Scope control",
     "Product alignment",
     "Verification quality",
     "Risk review",
+    "Next action",
+]
+
+CHANGE_SET_CRITIQUE_SECTIONS = [
+    "Scope control",
+    "Product alignment",
+    "Verification quality",
+    "Risk review",
+    "Maintainability",
     "Next action",
 ]
 
@@ -47,6 +58,51 @@ def render_critique(events: list[dict[str, object]]) -> str:
         f"### {section}\n\n{critique[section]}\n"
         for section in CRITIQUE_SECTIONS
     ).rstrip()
+
+
+def build_change_set_critique(
+    changed_files: list[str],
+    diff_text: str = "",
+    test_summary: str = "",
+    risk_summary: str = "",
+    smoke_summary: str = "",
+) -> dict[str, str]:
+    return {
+        "Scope control": critique_change_scope(changed_files),
+        "Product alignment": critique_change_alignment(changed_files),
+        "Verification quality": critique_change_verification(test_summary, smoke_summary),
+        "Risk review": critique_change_risk(changed_files, diff_text, risk_summary),
+        "Maintainability": critique_change_maintainability(changed_files, diff_text),
+        "Next action": critique_change_next_action(test_summary, risk_summary),
+    }
+
+
+def render_change_set_critique(
+    changed_files: list[str],
+    diff_text: str = "",
+    test_summary: str = "",
+    risk_summary: str = "",
+    smoke_summary: str = "",
+) -> str:
+    critique = build_change_set_critique(
+        changed_files,
+        diff_text=diff_text,
+        test_summary=test_summary,
+        risk_summary=risk_summary,
+        smoke_summary=smoke_summary,
+    )
+    return "\n".join(
+        f"### {section}\n\n{critique[section]}\n"
+        for section in CHANGE_SET_CRITIQUE_SECTIONS
+    ).rstrip()
+
+
+def changed_files_from_diff_name_output(output: str) -> list[str]:
+    return [
+        line.strip()
+        for line in output.splitlines()
+        if line.strip()
+    ]
 
 
 def critique_scope(
@@ -113,3 +169,84 @@ def critique_next_action(
     if tool_events:
         return "Continue with the next planned loop only after reviewing recorded tool events and artifacts."
     return "Proceed to the next loop after confirming the generated report matches the goal."
+
+
+def critique_change_scope(changed_files: list[str]) -> str:
+    if not changed_files:
+        return "No changed files were detected; there is no change-set to review."
+    private = [path for path in changed_files if is_private_path(path)]
+    if private:
+        return f"Scope is unsafe because private files are present: {', '.join(private)}."
+    if len(changed_files) > 12:
+        return f"Scope is broad with {len(changed_files)} changed files; split the next loop if possible."
+    return f"Scope is bounded to {len(changed_files)} public changed file(s)."
+
+
+def critique_change_alignment(changed_files: list[str]) -> str:
+    if any(path.startswith("src/ai_agent_loop/") for path in changed_files):
+        return "The change aligns with LoopForge's developer-tool core by modifying agent loop source."
+    if any(path.startswith("tests/") for path in changed_files):
+        return "The change mostly improves verification coverage, which supports LoopForge's reliability direction."
+    if any(path.startswith("docs/") for path in changed_files):
+        return "The change is documentation-heavy; confirm implementation still advances the loop goal."
+    return "Product alignment is unclear from file paths alone; inspect the diff before treating this as aligned."
+
+
+def critique_change_verification(test_summary: str, smoke_summary: str) -> str:
+    combined = f"{test_summary}\n{smoke_summary}".lower()
+    if "failed" in combined or "error" in combined:
+        return "Verification is not acceptable because the supplied summary includes failures or errors."
+    if "ok" in combined and ("smoke" in combined or "chrome" in combined or "snapshot" in combined):
+        return "Verification is strong: automated tests passed and a UI or snapshot smoke check is present."
+    if "ok" in combined or "passed" in combined:
+        return "Verification is partial: automated tests passed, but no smoke evidence was supplied."
+    return "Verification is weak because no passing test summary was supplied."
+
+
+def critique_change_risk(changed_files: list[str], diff_text: str, risk_summary: str) -> str:
+    lower_diff = diff_text.lower()
+    lower_risk = risk_summary.lower()
+    if any(is_private_path(path) for path in changed_files):
+        return "Risk is high because private files are included in the change-set."
+    risky_terms = ("subprocess", "remove-item", "git push", "delete", "approve", "resume")
+    found = [term for term in risky_terms if term in lower_diff]
+    if found and "no execution" not in lower_risk and "reserved" not in lower_risk:
+        return f"Risk needs review because the diff mentions sensitive actions: {', '.join(found)}."
+    if "no execution" in lower_risk or "reserved" in lower_risk:
+        return "Risk is controlled by explicit no-execution or reserved-action evidence."
+    return "No obvious high-risk operation was detected from the supplied change-set evidence."
+
+
+def critique_change_maintainability(changed_files: list[str], diff_text: str) -> str:
+    line_count = len(diff_text.splitlines())
+    source_files = [
+        path for path in changed_files
+        if path.startswith("src/") and Path(path).suffix == ".py"
+    ]
+    tests = [path for path in changed_files if path.startswith("tests/")]
+    if source_files and not tests:
+        return "Maintainability risk: source changed without matching test changes."
+    if line_count > 800:
+        return f"Maintainability risk: diff is large at {line_count} lines; prefer smaller loops."
+    if source_files:
+        return "Maintainability is acceptable: source changes are paired with tests or bounded diff size."
+    return "Maintainability impact is low from the supplied file set."
+
+
+def critique_change_next_action(test_summary: str, risk_summary: str) -> str:
+    combined = f"{test_summary}\n{risk_summary}".lower()
+    if "failed" in combined or "error" in combined:
+        return "Fix the failing verification or risk finding before starting another loop."
+    if "weak" in combined:
+        return "Add a narrower verification command before committing the next loop."
+    return "Proceed to the next loop after confirming the pushed commit matches the intended scope."
+
+
+def is_private_path(path: str) -> bool:
+    normalized = path.replace("\\", "/").lstrip("./")
+    return (
+        normalized == "AGENTS.md"
+        or normalized == "docs/loop-spec.md"
+        or normalized.startswith(".agent/")
+        or normalized.startswith("output/")
+    )

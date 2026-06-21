@@ -219,6 +219,7 @@ Current policy behavior:
 - `resume` is reserved as a CLI entry point but does not yet continue execution.
 - Approval ledger reports include integrity counts, latest entry, revocation chains, and not-ready reasons for audit review.
 - Execution adapter contracts are display-only: adapters can be ready or blocked, but execute support and executable actions remain disabled.
+- Change-set critique can review changed files, diff evidence, test summaries, risk summaries, and smoke summaries, but it is not an execution or approval gate.
 
 High-risk examples:
 

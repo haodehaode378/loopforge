@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 from datetime import datetime, timezone
 
@@ -17,7 +18,7 @@ from ai_agent_loop.evidence import (
 )
 from ai_agent_loop.execution_adapter import evaluate_execution_adapter_contract
 from ai_agent_loop.execution_gate import build_execution_gate_event, evaluate_execution_gates
-from ai_agent_loop.critique import render_critique
+from ai_agent_loop.critique import changed_files_from_diff_name_output, render_change_set_critique, render_critique
 from ai_agent_loop.ledger import (
     append_approval_ledger,
     approval_requests_with_ids,
@@ -76,8 +77,14 @@ def build_parser() -> argparse.ArgumentParser:
     report_parser = subparsers.add_parser("report", help="Show a run report.")
     report_parser.add_argument("run_id", help="Run ID to report.")
 
-    critique_parser = subparsers.add_parser("critique", help="Show dynamic run critique.")
-    critique_parser.add_argument("run_id", help="Run ID to critique.")
+    critique_parser = subparsers.add_parser("critique", help="Show dynamic run or change-set critique.")
+    critique_subparsers = critique_parser.add_subparsers(dest="critique_command")
+    critique_show_parser = critique_subparsers.add_parser("show", help="Show dynamic run critique.")
+    critique_show_parser.add_argument("run_id", help="Run ID to critique.")
+    critique_changes_parser = critique_subparsers.add_parser("changes", help="Show current git change-set critique.")
+    critique_changes_parser.add_argument("--tests", default="", help="Short test result summary.")
+    critique_changes_parser.add_argument("--risk", default="", help="Short risk scan summary.")
+    critique_changes_parser.add_argument("--smoke", default="", help="Short smoke test summary.")
 
     execution_parser = subparsers.add_parser("execution", help="Show reserved execution adapter contract.")
     execution_parser.add_argument("run_id", help="Run ID to inspect for execution adapter readiness.")
@@ -179,7 +186,10 @@ def main(argv: list[str] | None = None) -> None:
         return
 
     if args.command == "critique":
-        show_critique(args.store, args.project, args.run_id)
+        if args.critique_command == "changes":
+            show_change_set_critique(args.project, args.tests, args.risk, args.smoke)
+        else:
+            show_critique(args.store, args.project, args.run_id)
         return
 
     if args.command == "execution":
@@ -250,10 +260,24 @@ def normalize_argv(argv: list[str] | None) -> list[str]:
             continue
         if value not in commands:
             return raw_args[:index] + ["run"] + raw_args[index:]
+        if value == "critique":
+            return normalize_critique_argv(raw_args, index)
         if value == "approval":
             return normalize_approval_argv(raw_args, index)
         return raw_args
     return raw_args
+
+
+def normalize_critique_argv(raw_args: list[str], critique_index: int) -> list[str]:
+    next_index = critique_index + 1
+    if next_index >= len(raw_args):
+        return raw_args
+    next_value = raw_args[next_index]
+    if next_value in {"show", "changes"}:
+        return raw_args
+    if next_value.startswith("-"):
+        return raw_args
+    return raw_args[:next_index] + ["show"] + raw_args[next_index:]
 
 
 def normalize_approval_argv(raw_args: list[str], approval_index: int) -> list[str]:
@@ -334,6 +358,40 @@ def show_report(store: str, project: str, run_id: str) -> None:
 def show_critique(store: str, project: str, run_id: str) -> None:
     events = RunStore(store, project_path=project).read_events(run_id)
     sys.stdout.write(render_critique(events) + "\n")
+
+
+def show_change_set_critique(
+    project: str,
+    test_summary: str = "",
+    risk_summary: str = "",
+    smoke_summary: str = "",
+) -> None:
+    changed = git_output(project, ["diff", "--name-only"])
+    diff = git_output(project, ["diff", "--", "."])
+    changed_files = changed_files_from_diff_name_output(changed)
+    sys.stdout.write(
+        render_change_set_critique(
+            changed_files,
+            diff_text=diff,
+            test_summary=test_summary,
+            risk_summary=risk_summary,
+            smoke_summary=smoke_summary,
+        )
+        + "\n"
+    )
+
+
+def git_output(project: str, args: list[str]) -> str:
+    result = subprocess.run(
+        ["git", *args],
+        cwd=project,
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    return result.stdout
 
 
 def show_execution_adapter(store: str, project: str, run_id: str) -> None:

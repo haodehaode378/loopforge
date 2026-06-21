@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from ai_agent_loop import Agent, RunStore, build_critique, render_critique
+from ai_agent_loop import Agent, RunStore, build_change_set_critique, build_critique, render_change_set_critique, render_critique
 from ai_agent_loop.tools import ShellTools
 
 
@@ -15,6 +15,7 @@ class CritiqueTests(unittest.TestCase):
             store = RunStore(store_root)
 
             rendered = render_critique(store.read_events(run.run_id))
+            report = store.read_report(run.run_id)
 
             self.assertIn("### Scope control", rendered)
             self.assertIn("### Product alignment", rendered)
@@ -22,6 +23,8 @@ class CritiqueTests(unittest.TestCase):
             self.assertIn("### Risk review", rendered)
             self.assertIn("### Next action", rendered)
             self.assertIn("Verification is present", rendered)
+            self.assertIn("## Change-set Critique", report)
+            self.assertIn("### Maintainability", report)
 
     def test_blocked_run_critique_mentions_blocked_decision(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -55,6 +58,33 @@ class CritiqueTests(unittest.TestCase):
 
             self.assertIn("failed event", critique["Verification quality"])
             self.assertIn("Inspect failed tool output", critique["Next action"])
+
+    def test_change_set_critique_reviews_diff_evidence(self) -> None:
+        critique = build_change_set_critique(
+            ["src/ai_agent_loop/critique.py", "tests/test_critique.py"],
+            diff_text="+def example():\n+    return True\n",
+            test_summary="79 tests OK",
+            risk_summary="reserved no execution",
+            smoke_summary="Chrome smoke OK",
+        )
+        rendered = render_change_set_critique(
+            ["src/ai_agent_loop/critique.py", "tests/test_critique.py"],
+            test_summary="79 tests OK",
+            risk_summary="reserved no execution",
+            smoke_summary="Chrome smoke OK",
+        )
+
+        self.assertIn("bounded", critique["Scope control"])
+        self.assertIn("agent loop source", critique["Product alignment"])
+        self.assertIn("strong", critique["Verification quality"])
+        self.assertIn("Risk is controlled", critique["Risk review"])
+        self.assertIn("### Maintainability", rendered)
+
+    def test_change_set_critique_flags_private_files(self) -> None:
+        critique = build_change_set_critique(["AGENTS.md"])
+
+        self.assertIn("private files", critique["Scope control"])
+        self.assertIn("private files", critique["Risk review"])
 
 
 if __name__ == "__main__":

@@ -75,6 +75,8 @@ class WorkbenchTests(unittest.TestCase):
             self.assertEqual(snapshot["totals"]["projects"], 1)
             self.assertGreaterEqual(snapshot["totals"]["runs"], 3)
             self.assertGreaterEqual(snapshot["totals"]["blocked"], 1)
+            self.assertIn("app.py", snapshot["change_set_critique"]["changed_files"])
+            self.assertIn("public changed file", snapshot["change_set_critique"]["body"])
             project_data = snapshot["projects"][0]
             run_ids = {run["run_id"] for run in project_data["runs"]}
             self.assertIn(done.run_id, run_ids)
@@ -87,6 +89,7 @@ class WorkbenchTests(unittest.TestCase):
             parent = next(run for run in project_data["runs"] if run["run_id"] == multi.parent_run_id)
             self.assertEqual(parent["child_run_ids"], multi.child_run_ids)
             self.assertIn("Multi-Agent Summary", parent["sections"])
+            self.assertIn("Change-set Critique", parent["sections"])
             self.assertIn("Sharp Review", parent["sections"])
 
             done_run = next(run for run in project_data["runs"] if run["run_id"] == done.run_id)
@@ -148,6 +151,7 @@ class WorkbenchTests(unittest.TestCase):
             self.assertIn("Execution gate", diff_data["sections"]["Approval Readiness"])
             self.assertIn("Execution adapter contract", diff_data["sections"]["Approval Readiness"])
             self.assertIn("Evidence manifest", diff_data["sections"]["Approval Readiness"])
+            self.assertIn("Change-set Critique", diff_data["sections"])
             self.assertTrue(diff_data["risk_decisions"])
 
             blocked_run = next(run for run in project_data["runs"] if run["run_id"] == blocked.run_id)
@@ -197,6 +201,7 @@ class WorkbenchTests(unittest.TestCase):
             self.assertIn("Multi-Agent Summary", html)
             self.assertIn("Git Summary", html)
             self.assertIn("Automation Summary", html)
+            self.assertIn("Change-set Critique", html)
             self.assertIn("Critique", html)
 
     def test_workbench_command_parses_snapshot_flag(self) -> None:
