@@ -12,6 +12,7 @@ from ai_agent_loop.evidence import (
     scope_from_manifest_or_events,
     write_evidence_manifest,
 )
+from ai_agent_loop.execution_adapter import evaluate_execution_adapter_contract
 from ai_agent_loop.execution_gate import collect_execution_gate_events, evaluate_execution_gates
 from ai_agent_loop.goal import Goal
 from ai_agent_loop.critique import render_critique
@@ -386,6 +387,7 @@ def render_approval_readiness(
     evidence = scope_evidence_from_manifest_or_events(evidence_manifest, events)
     ledger = summarize_ledger(ledger_entries or [], scope)
     gates = evaluate_execution_gates(contract_data, ledger, evidence_manifest)
+    adapters = evaluate_execution_adapter_contract(gates)
     changed_files = collect_changed_files(events)
     diff_events = [
         event for event in events
@@ -417,6 +419,7 @@ def render_approval_readiness(
             "Scope replay:\n" + render_scope_replay(ledger["scope_replay"]),
             "Execution readiness:\n" + render_execution_ready(ledger["execution_ready_approvals"]),
             "Execution gate:\n" + render_execution_gate(gates),
+            "Execution adapter contract:\n" + render_execution_adapter_contract(adapters),
             "Gate audit:\n" + render_gate_audit(collect_execution_gate_events(events)),
             "Changed files:\n" + render_changed_files(changed_files),
             "Diff evidence:\n" + (f"- {len(diff_events)} diff artifact(s)" if diff_events else "- none"),
@@ -435,6 +438,27 @@ def render_execution_gate(gates: dict[str, object]) -> str:
         state = "ready" if record.get("ready_for_execution_adapter") else "blocked"
         lines.append(
             f"- {record.get('action')}: {state}; executable={record.get('executable')} - {record.get('reason')}"
+        )
+    return "\n".join(lines)
+
+
+def render_execution_adapter_contract(adapters: dict[str, object]) -> str:
+    records = adapters.get("adapters", [])
+    if not isinstance(records, list) or not records:
+        return "- none"
+    lines = [
+        f"- mode: {adapters.get('mode')}",
+        f"- dry_run_only: {adapters.get('dry_run_only')}",
+        f"- executable_actions: {len(adapters.get('executable_actions', []))}",
+        f"- ready_adapter_count: {adapters.get('ready_adapter_count', 0)}",
+        f"- blocked_adapter_count: {adapters.get('blocked_adapter_count', 0)}",
+    ]
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        lines.append(
+            f"- {record.get('adapter')}: {record.get('status')}; "
+            f"execute_supported={record.get('execute_supported')} - {record.get('reason')}"
         )
     return "\n".join(lines)
 

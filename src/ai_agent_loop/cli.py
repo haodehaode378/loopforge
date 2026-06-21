@@ -15,6 +15,7 @@ from ai_agent_loop.evidence import (
     scope_from_manifest_or_events,
     write_evidence_manifest,
 )
+from ai_agent_loop.execution_adapter import evaluate_execution_adapter_contract
 from ai_agent_loop.execution_gate import build_execution_gate_event, evaluate_execution_gates
 from ai_agent_loop.critique import render_critique
 from ai_agent_loop.ledger import (
@@ -77,6 +78,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     critique_parser = subparsers.add_parser("critique", help="Show dynamic run critique.")
     critique_parser.add_argument("run_id", help="Run ID to critique.")
+
+    execution_parser = subparsers.add_parser("execution", help="Show reserved execution adapter contract.")
+    execution_parser.add_argument("run_id", help="Run ID to inspect for execution adapter readiness.")
 
     approval_parser = subparsers.add_parser("approval", help="Show or record approval ledger decisions.")
     approval_subparsers = approval_parser.add_subparsers(dest="approval_command", required=True)
@@ -178,6 +182,10 @@ def main(argv: list[str] | None = None) -> None:
         show_critique(args.store, args.project, args.run_id)
         return
 
+    if args.command == "execution":
+        show_execution_adapter(args.store, args.project, args.run_id)
+        return
+
     if args.command == "approval":
         if args.approval_command == "decide":
             record_approval_decision(args)
@@ -217,7 +225,18 @@ def configure_stdio() -> None:
 
 def normalize_argv(argv: list[str] | None) -> list[str]:
     raw_args = list(sys.argv[1:] if argv is None else argv)
-    commands = {"run", "inspect", "report", "critique", "approval", "multi", "workbench", "resume", "tool"}
+    commands = {
+        "run",
+        "inspect",
+        "report",
+        "critique",
+        "execution",
+        "approval",
+        "multi",
+        "workbench",
+        "resume",
+        "tool",
+    }
     options_with_values = {"--store", "--project"}
     skip_next = False
     for index, value in enumerate(raw_args):
@@ -315,6 +334,21 @@ def show_report(store: str, project: str, run_id: str) -> None:
 def show_critique(store: str, project: str, run_id: str) -> None:
     events = RunStore(store, project_path=project).read_events(run_id)
     sys.stdout.write(render_critique(events) + "\n")
+
+
+def show_execution_adapter(store: str, project: str, run_id: str) -> None:
+    run_store = RunStore(store, project_path=project)
+    events = run_store.read_events(run_id)
+    contract = evaluate_approval_contract(events).to_dict()
+    manifest = read_evidence_manifest(run_store.run_dir(run_id))
+    scope = scope_from_manifest_or_events(manifest, events)
+    ledger = summarize_ledger(read_approval_ledger(run_store.run_dir(run_id)), scope)
+    gates = evaluate_execution_gates(contract, ledger, manifest)
+    adapters = evaluate_execution_adapter_contract(gates)
+    print(f"run_id: {run_id}")
+    print("execution_adapter_contract:")
+    print_json_lines(adapters)
+    print("No approval, resume, write, commit, push, or delete action was executed.")
 
 
 def show_approval(store: str, project: str, run_id: str) -> None:

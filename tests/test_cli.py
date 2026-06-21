@@ -98,6 +98,12 @@ class CliArgTests(unittest.TestCase):
         self.assertEqual(args.command, "critique")
         self.assertEqual(args.run_id, "run-1")
 
+    def test_execution_command_parses_run_id(self) -> None:
+        args = build_parser().parse_args(normalize_argv(["execution", "run-1"]))
+
+        self.assertEqual(args.command, "execution")
+        self.assertEqual(args.run_id, "run-1")
+
     def test_approval_command_parses_run_id(self) -> None:
         args = build_parser().parse_args(normalize_argv(["approval", "run-1"]))
 
@@ -168,6 +174,35 @@ class CliArgTests(unittest.TestCase):
             self.assertIn("No approval, resume, write, commit, push, or delete action was executed.", stdout.getvalue())
             self.assertEqual(entries[0]["decision"], "approved")
             self.assertEqual(entries[0]["actor"], "tester")
+
+    def test_execution_command_shows_adapter_contract_without_execution(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = root / "project"
+            project.mkdir()
+            store_root = root / ".agent"
+            result = Agent(store_root=store_root, project_path=project).run("Execution adapter contract")
+            run_store = RunStore(store_root, project_path=project)
+            ShellTools(run_store, result.run_id).run("echo adapter")
+
+            stdout = io.StringIO()
+            with redirect_stdout(stdout):
+                main(
+                    [
+                        "--store",
+                        str(store_root),
+                        "--project",
+                        str(project),
+                        "execution",
+                        result.run_id,
+                    ]
+                )
+
+            output = stdout.getvalue()
+            self.assertIn("execution_adapter_contract:", output)
+            self.assertIn("reserved execution adapter contract", output)
+            self.assertIn('"executable_actions": []', output)
+            self.assertIn("No approval, resume, write, commit, push, or delete action was executed.", output)
 
     def test_approval_decide_rejects_duplicate_active_decision(self) -> None:
         with TemporaryDirectory() as temp_dir:

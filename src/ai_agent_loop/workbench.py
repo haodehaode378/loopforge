@@ -13,6 +13,7 @@ from ai_agent_loop.evidence import (
     scope_evidence_from_manifest_or_events,
     scope_from_manifest_or_events,
 )
+from ai_agent_loop.execution_adapter import evaluate_execution_adapter_contract
 from ai_agent_loop.execution_gate import collect_execution_gate_events, evaluate_execution_gates
 from ai_agent_loop.ledger import read_approval_ledger, summarize_ledger
 from ai_agent_loop.project import ProjectRegistry
@@ -269,10 +270,12 @@ def build_approval_readiness(
     scope = scope_from_manifest_or_events(evidence_manifest, events)
     ledger = summarize_ledger(ledger_entries or [], scope)
     gates = evaluate_execution_gates(contract, ledger, evidence_manifest)
+    adapters = evaluate_execution_adapter_contract(gates)
     return {
         **contract,
         "ledger": ledger,
         "execution_gate": gates,
+        "execution_adapter": adapters,
         "gate_audit_events": collect_execution_gate_events(events),
         "scope_evidence": scope_evidence_from_manifest_or_events(evidence_manifest, events),
         "evidence_manifest": evidence_manifest,
@@ -641,7 +644,7 @@ const labels = {
     ledger: '审批账本', activeApprovals: '有效审批', expiredApprovals: '过期审批',
     revokedApprovals: '撤销审批', deniedApprovals: '拒绝审批', conflictApprovals: '冲突审批',
     scopeEvidence: 'Scope evidence', scopeReplay: 'Scope replay', executionReady: 'Execution ready',
-    evidenceManifest: 'Evidence manifest', executionGate: 'Execution gate', gateAudit: 'Gate audit',
+    evidenceManifest: 'Evidence manifest', executionGate: 'Execution gate', executionAdapter: 'Execution adapter contract', gateAudit: 'Gate audit',
     ledgerIntegrity: 'Ledger integrity'
   },
   en: {
@@ -657,7 +660,7 @@ const labels = {
     ledger: 'Approval ledger', activeApprovals: 'Active approvals', expiredApprovals: 'Expired approvals',
     revokedApprovals: 'Revoked approvals', deniedApprovals: 'Denied approvals', conflictApprovals: 'Conflict approvals',
     scopeEvidence: 'Scope evidence', scopeReplay: 'Scope replay', executionReady: 'Execution ready',
-    evidenceManifest: 'Evidence manifest', executionGate: 'Execution gate', gateAudit: 'Gate audit',
+    evidenceManifest: 'Evidence manifest', executionGate: 'Execution gate', executionAdapter: 'Execution adapter contract', gateAudit: 'Gate audit',
     ledgerIntegrity: 'Ledger integrity'
   }
 };
@@ -816,6 +819,8 @@ function renderApproval(run) {
     ${renderLedger(approval.ledger || run.approval_ledger || {})}
     <div class="section-title">${t('executionGate')}</div>
     ${renderExecutionGate(approval.execution_gate || {})}
+    <div class="section-title">${t('executionAdapter')}</div>
+    ${renderExecutionAdapter(approval.execution_adapter || {})}
     <div class="section-title">${t('gateAudit')}</div>
     ${renderGateAudit(approval.gate_audit_events || run.gate_audit_events || [])}
     <div class="section-title">${t('changedFiles')}</div>
@@ -952,6 +957,23 @@ function renderExecutionGate(gate) {
       ${esc(item.action)} · ${item.ready_for_execution_adapter ? 'ready' : 'blocked'} · executable: ${esc(item.executable)}
       <div class="run-meta">${esc(item.reason || '')}</div>
     </div>`).join('')}</div>`;
+}
+function renderExecutionAdapter(contract) {
+  const adapters = contract.adapters || [];
+  if (!adapters.length) return `<div class="run-meta">${t('empty')}</div>`;
+  return `<div class="risk-list">
+    <div class="risk-item">
+      ${esc(contract.mode || 'reserved execution adapter contract')} / dry_run_only: ${esc(contract.dry_run_only)}
+      <div class="run-meta">ready_adapter_count: ${esc(contract.ready_adapter_count || 0)} / blocked_adapter_count: ${esc(contract.blocked_adapter_count || 0)}</div>
+      <div class="run-meta">${esc(contract.no_execution_guarantee || '')}</div>
+    </div>
+    ${adapters.map(item => `
+      <div class="risk-item">
+        ${esc(item.adapter)} / ${esc(item.status)} / executable: ${esc(item.executable)}
+        <div class="run-meta">execute_supported: ${esc(item.execute_supported)} / dry_run_supported: ${esc(item.dry_run_supported)}</div>
+        <div class="run-meta">${esc(item.reason || '')}</div>
+      </div>`).join('')}
+  </div>`;
 }
 function renderGateAudit(events) {
   if (!events.length) return `<div class="run-meta">${t('empty')}</div>`;

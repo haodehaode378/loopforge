@@ -662,3 +662,27 @@ If incomplete:
 
 - Keep Loop 23 approval revocation as the reliable baseline.
 - Do not add resume/write/commit/push/delete execution adapters.
+
+## Loop 25: Reserved Execution Adapter Contract
+
+Goal: define the shape of future execution adapters without executing any reserved action.
+
+Must complete:
+
+- Add a pure execution adapter contract derived from execution gate readiness.
+- Include adapter name, action, ready/blocked status, dry-run support, execute support, blockers, and executable state.
+- Keep every adapter `execute_supported=false` and `executable=false`.
+- Add `loopforge execution <run_id>` to show the adapter contract.
+- Show the adapter contract in reports and the Workbench.
+- Keep approve, resume, write, commit, push, and delete non-executable.
+
+Verification:
+
+- Unit tests cover ready and blocked adapter records.
+- CLI tests prove the execution command only displays the contract.
+- Workbench snapshot and smoke checks show the execution adapter contract.
+
+If incomplete:
+
+- Keep Loop 24 ledger integrity as the reliable baseline.
+- Do not add adapter execution, approval buttons, resume, write, commit, push, or delete behavior.
