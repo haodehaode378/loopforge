@@ -250,6 +250,21 @@ class ApprovalLedgerTests(unittest.TestCase):
         entry["actor_signature"] = "placeholder:wrong"
         self.assertEqual(evaluate_signature_status(entry), "invalid")
 
+    def test_revocation_records_actor_identity_and_signature_payload(self) -> None:
+        entry = build_ledger_revocation_record(
+            "dec_1",
+            actor="alice",
+            created_at="2026-06-18T01:00:00Z",
+            reason="Scope changed.",
+        )
+
+        self.assertEqual(entry["entry_type"], "revocation")
+        self.assertEqual(entry["decision"], "revoked")
+        self.assertEqual(entry["decision_id"], "dec_1")
+        self.assertEqual(entry["actor_id"], actor_identity("alice")["actor_id"])
+        self.assertEqual(entry["signature_status"], "unsigned")
+        self.assertEqual(entry["signature_payload_hash"], signature_payload_hash(entry))
+
 
 if __name__ == "__main__":
     unittest.main()

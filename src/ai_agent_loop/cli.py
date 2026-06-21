@@ -21,6 +21,7 @@ from ai_agent_loop.ledger import (
     append_approval_ledger,
     approval_requests_with_ids,
     build_ledger_decision_record,
+    build_ledger_revocation_record,
     read_approval_ledger,
     summarize_ledger,
     validate_decision_record,
@@ -95,6 +96,11 @@ def build_parser() -> argparse.ArgumentParser:
     decide_parser.add_argument("--actor", required=True)
     decide_parser.add_argument("--reason", required=True)
     decide_parser.add_argument("--expires-at", required=True)
+    revoke_parser = approval_subparsers.add_parser("revoke", help="Record an approval ledger revocation only.")
+    revoke_parser.add_argument("run_id", help="Run ID to record a revocation for.")
+    revoke_parser.add_argument("--decision-id", required=True)
+    revoke_parser.add_argument("--actor", required=True)
+    revoke_parser.add_argument("--reason", required=True)
 
     multi_parser = subparsers.add_parser("multi", help="Run read-only multi-agent analysis.")
     multi_parser.add_argument("goal", help="Goal for the multi-agent run.")
@@ -175,6 +181,8 @@ def main(argv: list[str] | None = None) -> None:
     if args.command == "approval":
         if args.approval_command == "decide":
             record_approval_decision(args)
+        elif args.approval_command == "revoke":
+            record_approval_revocation(args)
         elif args.approval_command == "gate":
             show_execution_gate(args.store, args.project, args.run_id, args.record)
         else:
@@ -234,7 +242,7 @@ def normalize_approval_argv(raw_args: list[str], approval_index: int) -> list[st
     if next_index >= len(raw_args):
         return raw_args
     next_value = raw_args[next_index]
-    if next_value in {"show", "decide", "gate"}:
+    if next_value in {"show", "decide", "gate", "revoke"}:
         return raw_args
     if next_value.startswith("-"):
         return raw_args
@@ -425,6 +433,44 @@ def record_approval_decision(args: argparse.Namespace) -> None:
     print(f"request_id: {entry['request_id']}")
     print(f"decision_id: {entry['decision_id']}")
     print(f"decision: {entry['decision']}")
+    print("No approval, resume, write, commit, push, or delete action was executed.")
+
+
+def record_approval_revocation(args: argparse.Namespace) -> None:
+    run_store = RunStore(args.store, project_path=args.project)
+    run_dir = run_store.run_dir(args.run_id)
+    entries = read_approval_ledger(run_dir)
+    decision_ids = {
+        str(entry.get("decision_id"))
+        for entry in entries
+        if entry.get("entry_type") != "revocation"
+    }
+    revoked_ids = {
+        str(entry.get("decision_id"))
+        for entry in entries
+        if entry.get("entry_type") == "revocation"
+    }
+    if args.decision_id not in decision_ids:
+        print("revocation_recorded: false")
+        print("decision-id is not part of the current approval ledger.")
+        return
+    if args.decision_id in revoked_ids:
+        print("revocation_recorded: false")
+        print("conflict: decision-id is already revoked.")
+        return
+
+    created_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    entry = build_ledger_revocation_record(
+        args.decision_id,
+        actor=args.actor,
+        created_at=created_at,
+        reason=args.reason,
+    )
+    append_approval_ledger(run_dir, entry)
+    write_evidence_manifest(run_dir, run_store.read_events(args.run_id))
+    print("revocation_recorded: true")
+    print(f"decision_id: {entry['decision_id']}")
+    print(f"actor: {entry['actor']}")
     print("No approval, resume, write, commit, push, or delete action was executed.")
 
 

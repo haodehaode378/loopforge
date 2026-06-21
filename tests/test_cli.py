@@ -113,6 +113,16 @@ class CliArgTests(unittest.TestCase):
         self.assertEqual(args.run_id, "run-1")
         self.assertTrue(args.record)
 
+    def test_approval_revoke_command_parses_decision_id(self) -> None:
+        args = build_parser().parse_args(
+            normalize_argv(["approval", "revoke", "run-1", "--decision-id", "dec-1", "--actor", "tester", "--reason", "Scope changed"])
+        )
+
+        self.assertEqual(args.command, "approval")
+        self.assertEqual(args.approval_command, "revoke")
+        self.assertEqual(args.run_id, "run-1")
+        self.assertEqual(args.decision_id, "dec-1")
+
     def test_approval_decide_records_decision_without_execution(self) -> None:
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -307,6 +317,96 @@ class CliArgTests(unittest.TestCase):
             self.assertIn("No approval, resume, write, commit, push, or delete action was executed.", output)
             self.assertEqual(gate_events[0]["metadata"]["executable_actions"], [])
             self.assertIn("Gate audit", run_store.read_report(result.run_id))
+
+    def test_approval_revoke_records_revocation_without_execution(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = root / "project"
+            project.mkdir()
+            store_root = root / ".agent"
+            result = Agent(store_root=store_root, project_path=project).run("Approval revoke")
+            run_store = RunStore(store_root, project_path=project)
+            ShellTools(run_store, result.run_id).run("echo approval")
+            events = run_store.read_events(result.run_id)
+            request = approval_requests_with_ids(
+                result.run_id,
+                evaluate_approval_contract(events),
+                approval_scope(events),
+            )[0]
+            with redirect_stdout(io.StringIO()):
+                main(
+                    [
+                        "--store",
+                        str(store_root),
+                        "--project",
+                        str(project),
+                        "approval",
+                        "decide",
+                        result.run_id,
+                        "--request-id",
+                        str(request["request_id"]),
+                        "--decision",
+                        "approve",
+                        "--actor",
+                        "tester",
+                        "--reason",
+                        "Reviewed output.",
+                        "--expires-at",
+                        "2999-01-01T00:00:00Z",
+                    ]
+                )
+            decision_id = read_approval_ledger(run_store.run_dir(result.run_id))[0]["decision_id"]
+
+            stdout = io.StringIO()
+            with redirect_stdout(stdout):
+                main(
+                    [
+                        "--store",
+                        str(store_root),
+                        "--project",
+                        str(project),
+                        "approval",
+                        "revoke",
+                        result.run_id,
+                        "--decision-id",
+                        str(decision_id),
+                        "--actor",
+                        "tester",
+                        "--reason",
+                        "Scope changed.",
+                    ]
+                )
+
+            entries = read_approval_ledger(run_store.run_dir(result.run_id))
+            output = stdout.getvalue()
+            self.assertEqual(len(entries), 2)
+            self.assertIn("revocation_recorded: true", output)
+            self.assertIn("No approval, resume, write, commit, push, or delete action was executed.", output)
+            self.assertIn("Revoked approvals", run_store.read_report(result.run_id))
+            self.assertIn(str(decision_id), run_store.read_report(result.run_id))
+
+            duplicate = io.StringIO()
+            with redirect_stdout(duplicate):
+                main(
+                    [
+                        "--store",
+                        str(store_root),
+                        "--project",
+                        str(project),
+                        "approval",
+                        "revoke",
+                        result.run_id,
+                        "--decision-id",
+                        str(decision_id),
+                        "--actor",
+                        "tester",
+                        "--reason",
+                        "Again.",
+                    ]
+                )
+
+            self.assertIn("revocation_recorded: false", duplicate.getvalue())
+            self.assertIn("already revoked", duplicate.getvalue())
 
 
 if __name__ == "__main__":

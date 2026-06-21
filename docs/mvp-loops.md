@@ -613,3 +613,28 @@ If incomplete:
 
 - Keep Loop 21 audit digest as the reliable baseline.
 - Do not add real cryptographic keys, key storage, execution adapters, or clickable approval buttons.
+
+## Loop 23: Approval Revocation Recorder
+
+Goal: let users revoke a recorded approval decision without executing any reserved action.
+
+Must complete:
+
+- Add `loopforge approval revoke <run_id> --decision-id <id> --actor <name> --reason <text>`.
+- Validate that the decision id exists in the current approval ledger.
+- Reject duplicate revocations as conflicts.
+- Append only a revocation ledger entry with actor identity and signature payload skeleton fields.
+- Refresh evidence manifest after the ledger append.
+- Show revoked approvals in CLI approval output, reports, and the Workbench.
+- Keep approve, resume, write, commit, push, and delete non-executable.
+
+Verification:
+
+- Unit tests cover revocation entry shape, successful CLI revocation, duplicate revocation rejection, and report output.
+- CLI smoke records a decision, revokes it, and shows revoked state.
+- Workbench snapshot shows the revoked approval group.
+
+If incomplete:
+
+- Keep Loop 22 actor signature skeleton as the reliable baseline.
+- Do not add resume/write/commit/push/delete execution adapters.
