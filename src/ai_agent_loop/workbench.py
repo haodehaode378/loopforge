@@ -869,7 +869,9 @@ function renderLedgerEntries(entries) {
   return entries.map(entry => `
     <div class="ledger-item ${esc(entry.status)}">
       ${esc(entry.decision_id)} · ${esc(entry.decision)} · ${esc(entry.actor)} · ${esc(entry.expires_at || 'never')}
-      <div class="run-meta">replay: ${esc(entry.replay_status || '')} · signature: ${esc(entry.signature_status || 'unsigned')}</div>
+      <div class="run-meta">actor_id: ${esc(entry.actor_id || 'unknown')} · kind: ${esc(entry.actor_kind || 'unknown')}</div>
+      <div class="run-meta">replay: ${esc(entry.replay_status || '')} · signature: ${esc(entry.signature_status || 'unsigned')} · ${esc(entry.signature_algorithm || 'placeholder-local-audit-v1')}</div>
+      <div class="run-meta">payload: ${esc(entry.signature_payload_hash || 'missing')}</div>
       <div class="run-meta">${esc(entry.reason || '')}</div>
     </div>`).join('');
 }
@@ -912,7 +914,8 @@ function renderScopeReplay(records) {
     const replayClass = String(record.replay_status || 'missing evidence').replace(/\s+/g, '-');
     return `<div class="ledger-item ${esc(replayClass)}">
       ${esc(record.decision_id)} · ${esc(record.replay_status)} · ready: ${esc(record.execution_ready)}
-      <div class="run-meta">signature: ${esc(record.signature_status || 'unsigned')} · ${esc(record.actor || '')}</div>
+      <div class="run-meta">signature: ${esc(record.signature_status || 'unsigned')} · ${esc(record.actor || '')} · ${esc(record.actor_id || 'unknown')}</div>
+      <div class="run-meta">payload: ${esc(record.signature_payload_hash || 'missing')}</div>
     </div>`;
   }).join('');
 }

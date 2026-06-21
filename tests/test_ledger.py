@@ -5,13 +5,17 @@ from tempfile import TemporaryDirectory
 
 from ai_agent_loop.approval import evaluate_approval_contract
 from ai_agent_loop.ledger import (
+    actor_identity,
     approval_scope,
     approval_scope_evidence,
     build_ledger_decision_record,
     build_ledger_revocation_record,
+    evaluate_signature_status,
+    placeholder_signature,
     read_approval_ledger,
     request_id,
     scope_hash,
+    signature_payload_hash,
     summarize_ledger,
 )
 
@@ -192,6 +196,59 @@ class ApprovalLedgerTests(unittest.TestCase):
         self.assertEqual(len(evidence["diff_hashes"]), 1)
         self.assertEqual(evidence["command_scope"], ["git diff"])
         self.assertEqual(len(evidence["risk_scope"]), 1)
+
+    def test_ledger_records_actor_identity_and_signature_payload(self) -> None:
+        request = evaluate_approval_contract(
+            [
+                {
+                    "name": "shell.run",
+                    "status": "done",
+                    "risk": {"level": "medium", "reason": "Shell command can change project state."},
+                    "metadata": {"command": "echo approval"},
+                }
+            ]
+        ).required_approvals[0]
+        scope = ["command:echo approval"]
+
+        entry = build_ledger_decision_record(
+            "run-1",
+            request,
+            actor="alice",
+            created_at="2026-06-18T00:00:00Z",
+            expires_at="2999-01-01T00:00:00Z",
+            scope=scope,
+            decision="approved",
+            reason="Reviewed.",
+        )
+
+        self.assertEqual(entry["actor_id"], actor_identity("alice")["actor_id"])
+        self.assertEqual(entry["actor_kind"], "local-user")
+        self.assertEqual(entry["signature_status"], "unsigned")
+        self.assertEqual(entry["signature_payload_hash"], signature_payload_hash(entry))
+        self.assertEqual(entry["signature_algorithm"], "placeholder-local-audit-v1")
+
+    def test_placeholder_signature_status_is_deterministic_but_not_real_crypto(self) -> None:
+        entry = {
+            "entry_type": "decision",
+            "request_id": "req_1",
+            "decision_id": "dec_1",
+            "actor": "alice",
+            "actor_id": actor_identity("alice")["actor_id"],
+            "actor_kind": "local-user",
+            "created_at": "2026-06-18T00:00:00Z",
+            "expires_at": "2999-01-01T00:00:00Z",
+            "scope_hash": "abc",
+            "decision": "approved",
+            "reason": "Reviewed.",
+            "scope_parts": ["command:echo approval"],
+        }
+        payload_hash = signature_payload_hash(entry)
+        entry["signature_payload_hash"] = payload_hash
+        entry["actor_signature"] = placeholder_signature(payload_hash)
+
+        self.assertEqual(evaluate_signature_status(entry), "placeholder-valid")
+        entry["actor_signature"] = "placeholder:wrong"
+        self.assertEqual(evaluate_signature_status(entry), "invalid")
 
 
 if __name__ == "__main__":

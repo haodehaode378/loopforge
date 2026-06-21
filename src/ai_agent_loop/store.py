@@ -540,8 +540,11 @@ def render_ledger_entries(entries: object) -> str:
             continue
         lines.append(
             f"- {entry.get('decision_id')}: {entry.get('decision')} by {entry.get('actor')} "
+            f"({entry.get('actor_id', 'unknown')}, {entry.get('actor_kind', 'unknown')}) "
             f"until {entry.get('expires_at') or 'never'} "
-            f"[replay: {entry.get('replay_status')}, signature: {entry.get('signature_status')}] "
+            f"[replay: {entry.get('replay_status')}, signature: {entry.get('signature_status')}, "
+            f"algorithm: {entry.get('signature_algorithm', 'placeholder-local-audit-v1')}, "
+            f"payload: {entry.get('signature_payload_hash', '') or 'missing'}] "
             f"- {entry.get('reason')}"
         )
     return "\n".join(lines) if lines else "- none"

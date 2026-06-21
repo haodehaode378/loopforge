@@ -269,6 +269,10 @@ class CliArgTests(unittest.TestCase):
             self.assertIn('"executable": false', output)
             self.assertIn('"replay_status": "matched"', output)
             self.assertIn('"signature_status": "unsigned"', output)
+            self.assertIn('"actor_id": "actor_', output)
+            self.assertIn('"actor_kind": "local-user"', output)
+            self.assertIn('"signature_algorithm": "placeholder-local-audit-v1"', output)
+            self.assertIn('"signature_payload_hash":', output)
 
     def test_approval_gate_records_audit_event_without_execution(self) -> None:
         with TemporaryDirectory() as temp_dir:

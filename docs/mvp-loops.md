@@ -588,3 +588,28 @@ If incomplete:
 
 - Keep Loop 20 gate audit events as the reliable baseline.
 - Do not add cryptographic signatures, execution adapters, or clickable approval buttons.
+
+## Loop 22: Actor Identity And Signature Skeleton
+
+Goal: make approval ledger decisions identify who made the decision and what payload would be signed later.
+
+Must complete:
+
+- Add actor identity fields for ledger entries: actor id and actor kind.
+- Add a deterministic signature payload hash for approval and revocation entries.
+- Add a placeholder signature algorithm and status evaluation: unsigned, placeholder-valid, or invalid.
+- Keep placeholder signatures explicitly non-cryptographic.
+- Show actor id, actor kind, signature payload hash, algorithm, and status in reports and the Workbench.
+- Keep execution readiness independent from signature status until a real signing policy exists.
+- Keep approve, resume, write, commit, push, and delete non-executable.
+
+Verification:
+
+- Unit tests cover actor identity, payload hash, unsigned signatures, placeholder-valid signatures, and invalid signatures.
+- CLI approval output includes actor and signature skeleton fields.
+- Workbench snapshot and browser smoke test show actor and signature skeleton fields.
+
+If incomplete:
+
+- Keep Loop 21 audit digest as the reliable baseline.
+- Do not add real cryptographic keys, key storage, execution adapters, or clickable approval buttons.

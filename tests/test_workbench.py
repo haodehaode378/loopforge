@@ -99,6 +99,12 @@ class WorkbenchTests(unittest.TestCase):
             self.assertEqual(len(done_run["approval"]["ledger"]["active_approvals"]), 1)
             self.assertEqual(done_run["approval"]["ledger"]["scope_replay"][0]["replay_status"], "matched")
             self.assertEqual(done_run["approval"]["ledger"]["scope_replay"][0]["signature_status"], "unsigned")
+            self.assertTrue(done_run["approval"]["ledger"]["scope_replay"][0]["actor_id"].startswith("actor_"))
+            self.assertEqual(
+                done_run["approval"]["ledger"]["scope_replay"][0]["signature_algorithm"],
+                "placeholder-local-audit-v1",
+            )
+            self.assertTrue(done_run["approval"]["ledger"]["scope_replay"][0]["signature_payload_hash"])
             self.assertTrue(done_run["approval"]["ledger"]["execution_ready_approvals"])
             self.assertTrue(done_run["approval"]["scope_evidence"]["has_evidence"])
             self.assertEqual(done_run["approval"]["scope_evidence"]["manifest_status"], "present")
@@ -157,6 +163,9 @@ class WorkbenchTests(unittest.TestCase):
             self.assertIn("撤销审批", html)
             self.assertIn("Scope replay", html)
             self.assertIn("Execution ready", html)
+            self.assertIn("actor_id", html)
+            self.assertIn("signature_payload_hash", html)
+            self.assertIn("placeholder-local-audit-v1", html)
             self.assertIn("Execution gate", html)
             self.assertIn("Gate audit", html)
             self.assertIn("Evidence manifest", html)

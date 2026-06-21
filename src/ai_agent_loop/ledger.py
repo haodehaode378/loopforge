@@ -20,6 +20,8 @@ class LedgerEntry:
     request_id: str
     decision_id: str
     actor: str
+    actor_id: str
+    actor_kind: str
     created_at: str
     expires_at: str
     scope_hash: str
@@ -27,6 +29,8 @@ class LedgerEntry:
     reason: str
     scope_parts: tuple[str, ...] = ()
     actor_signature: str = ""
+    signature_payload_hash: str = ""
+    signature_algorithm: str = "placeholder-local-audit-v1"
     signature_status: str = "unsigned"
 
     def to_dict(self) -> dict[str, object]:
@@ -35,6 +39,8 @@ class LedgerEntry:
             "request_id": self.request_id,
             "decision_id": self.decision_id,
             "actor": self.actor,
+            "actor_id": self.actor_id,
+            "actor_kind": self.actor_kind,
             "created_at": self.created_at,
             "expires_at": self.expires_at,
             "scope_hash": self.scope_hash,
@@ -42,6 +48,8 @@ class LedgerEntry:
             "reason": self.reason,
             "scope_parts": list(self.scope_parts),
             "actor_signature": self.actor_signature,
+            "signature_payload_hash": self.signature_payload_hash,
+            "signature_algorithm": self.signature_algorithm,
             "signature_status": self.signature_status,
         }
 
@@ -68,15 +76,63 @@ def append_approval_ledger(run_dir: Path, entry: dict[str, object]) -> Path:
     return path
 
 
+def actor_identity(actor: str, actor_kind: str = "local-user") -> dict[str, object]:
+    return {
+        "actor": actor,
+        "actor_id": "actor_" + scope_hash([actor_kind, actor]),
+        "actor_kind": actor_kind,
+    }
+
+
+def signature_payload(entry: dict[str, object]) -> dict[str, object]:
+    return {
+        "entry_type": entry.get("entry_type", ""),
+        "request_id": entry.get("request_id", ""),
+        "decision_id": entry.get("decision_id", ""),
+        "actor_id": entry.get("actor_id", ""),
+        "actor_kind": entry.get("actor_kind", ""),
+        "created_at": entry.get("created_at", ""),
+        "expires_at": entry.get("expires_at", ""),
+        "scope_hash": entry.get("scope_hash", ""),
+        "decision": entry.get("decision", ""),
+        "reason": entry.get("reason", ""),
+        "scope_parts": sorted(str(part) for part in entry.get("scope_parts", [])),
+    }
+
+
+def signature_payload_hash(entry: dict[str, object]) -> str:
+    payload = json.dumps(signature_payload(entry), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def placeholder_signature(payload_hash: str) -> str:
+    return f"placeholder:{payload_hash}"
+
+
+def evaluate_signature_status(entry: dict[str, object]) -> str:
+    signature = str(entry.get("actor_signature") or "")
+    payload_hash = str(entry.get("signature_payload_hash") or signature_payload_hash(entry))
+    if not signature:
+        return "unsigned"
+    if signature == placeholder_signature(payload_hash):
+        return "placeholder-valid"
+    return "invalid"
+
+
 def normalize_ledger_entry(data: dict[str, object]) -> dict[str, object]:
     scope_parts = data.get("scope_parts", [])
     if not isinstance(scope_parts, list):
         scope_parts = []
+    actor = str(data.get("actor") or "unknown")
+    actor_id = str(data.get("actor_id") or actor_identity(actor)["actor_id"])
+    actor_kind = str(data.get("actor_kind") or actor_identity(actor)["actor_kind"])
     entry = LedgerEntry(
         entry_type=str(data.get("entry_type") or data.get("type") or "decision"),
         request_id=str(data.get("request_id") or ""),
         decision_id=str(data.get("decision_id") or ""),
-        actor=str(data.get("actor") or "unknown"),
+        actor=actor,
+        actor_id=actor_id,
+        actor_kind=actor_kind,
         created_at=str(data.get("created_at") or ""),
         expires_at=str(data.get("expires_at") or ""),
         scope_hash=str(data.get("scope_hash") or ""),
@@ -84,8 +140,13 @@ def normalize_ledger_entry(data: dict[str, object]) -> dict[str, object]:
         reason=str(data.get("reason") or ""),
         scope_parts=tuple(str(part) for part in scope_parts),
         actor_signature=str(data.get("actor_signature") or ""),
-        signature_status=str(data.get("signature_status") or "unsigned"),
+        signature_payload_hash=str(data.get("signature_payload_hash") or ""),
+        signature_algorithm=str(data.get("signature_algorithm") or "placeholder-local-audit-v1"),
     ).to_dict()
+    entry["signature_payload_hash"] = str(
+        entry.get("signature_payload_hash") or signature_payload_hash(entry)
+    )
+    entry["signature_status"] = evaluate_signature_status(entry)
     entry["status"] = ledger_entry_status(entry)
     return entry
 
@@ -179,7 +240,11 @@ def ledger_replay_record(entry: dict[str, object]) -> dict[str, object]:
         "execution_ready": bool(entry.get("execution_ready")),
         "scope_hash": entry.get("scope_hash", ""),
         "actor": entry.get("actor", ""),
+        "actor_id": entry.get("actor_id", ""),
+        "actor_kind": entry.get("actor_kind", ""),
         "actor_signature": entry.get("actor_signature", ""),
+        "signature_payload_hash": entry.get("signature_payload_hash", ""),
+        "signature_algorithm": entry.get("signature_algorithm", "placeholder-local-audit-v1"),
         "signature_status": entry.get("signature_status", "unsigned"),
     }
 
@@ -338,11 +403,14 @@ def build_ledger_decision_record(
     reason: str,
 ) -> dict[str, object]:
     req_id = request_id(run_id, request, scope)
-    return LedgerEntry(
+    identity = actor_identity(actor)
+    entry = LedgerEntry(
         entry_type="decision",
         request_id=req_id,
         decision_id=decision_id(req_id, actor, created_at),
         actor=actor,
+        actor_id=str(identity["actor_id"]),
+        actor_kind=str(identity["actor_kind"]),
         created_at=created_at,
         expires_at=expires_at,
         scope_hash=scope_hash(scope),
@@ -352,6 +420,9 @@ def build_ledger_decision_record(
         actor_signature="",
         signature_status="unsigned",
     ).to_dict()
+    entry["signature_payload_hash"] = signature_payload_hash(entry)
+    entry["signature_status"] = evaluate_signature_status(entry)
+    return entry
 
 
 def validate_decision_record(
@@ -382,17 +453,23 @@ def build_ledger_revocation_record(
     created_at: str,
     reason: str,
 ) -> dict[str, object]:
-    return LedgerEntry(
+    identity = actor_identity(actor)
+    entry = LedgerEntry(
         entry_type="revocation",
         request_id="",
         decision_id=decision_id_value,
         actor=actor,
+        actor_id=str(identity["actor_id"]),
+        actor_kind=str(identity["actor_kind"]),
         created_at=created_at,
         expires_at="",
         scope_hash="",
         decision="revoked",
         reason=reason,
     ).to_dict()
+    entry["signature_payload_hash"] = signature_payload_hash(entry)
+    entry["signature_status"] = evaluate_signature_status(entry)
+    return entry
 
 
 def parse_time(value: str) -> datetime:
