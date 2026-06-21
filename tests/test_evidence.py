@@ -4,8 +4,11 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from ai_agent_loop.evidence import (
+    audit_status,
     build_evidence_manifest,
+    build_event_chain,
     read_evidence_manifest,
+    recompute_audit_digest,
     scope_evidence_from_manifest_or_events,
     scope_from_manifest_or_events,
     verify_evidence_manifest,
@@ -46,6 +49,9 @@ class EvidenceManifestTests(unittest.TestCase):
             self.assertTrue(manifest["core_hashes"]["report.md"])
             self.assertEqual(manifest["command_scope"], ["echo hello"])
             self.assertEqual(len(manifest["artifact_hashes"]), 1)
+            self.assertEqual(manifest["audit_status"], "verified")
+            self.assertTrue(manifest["audit_digest"])
+            self.assertEqual(manifest["audit_chain"]["event_count"], 1)
 
     def test_manifest_scope_is_preferred_and_missing_manifest_falls_back(self) -> None:
         events = [
@@ -149,6 +155,50 @@ class EvidenceManifestTests(unittest.TestCase):
         }
 
         self.assertEqual(scope_from_manifest_or_events(manifest, events), approval_scope(events))
+
+    def test_event_chain_and_audit_digest_are_recomputable(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            run_dir = Path(temp_dir)
+            events = [
+                {"name": "goal", "status": "done", "detail": "audit"},
+                {"name": "verify", "status": "done", "detail": "ok"},
+            ]
+            (run_dir / "events.jsonl").write_text(
+                "\n".join(json.dumps(event) for event in events) + "\n",
+                encoding="utf-8",
+            )
+            (run_dir / "report.md").write_text("# Report\n", encoding="utf-8")
+
+            manifest = build_evidence_manifest(run_dir, events)
+            recomputed = recompute_audit_digest(run_dir, events)
+
+            self.assertEqual(build_event_chain(events)["head"], manifest["audit_chain"]["head"])
+            self.assertEqual(recomputed["audit_digest"], manifest["audit_digest"])
+
+    def test_audit_digest_detects_event_tampering_without_breaking_legacy_manifests(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            run_dir = Path(temp_dir)
+            events = [{"name": "goal", "status": "done", "detail": "audit"}]
+            (run_dir / "events.jsonl").write_text(
+                "\n".join(json.dumps(event) for event in events) + "\n",
+                encoding="utf-8",
+            )
+            (run_dir / "report.md").write_text("# Report\n", encoding="utf-8")
+            write_evidence_manifest(run_dir, events)
+            self.assertEqual(read_evidence_manifest(run_dir)["audit_status"], "verified")
+
+            changed = [{"name": "goal", "status": "done", "detail": "changed"}]
+            (run_dir / "events.jsonl").write_text(
+                "\n".join(json.dumps(event) for event in changed) + "\n",
+                encoding="utf-8",
+            )
+            tampered = read_evidence_manifest(run_dir)
+
+            self.assertEqual(tampered["audit_status"], "tampered")
+            self.assertEqual(tampered["integrity_status"], "tampered")
+
+            legacy_manifest = {"status": "present", "scope_parts": [], "scope_hash": scope_hash([])}
+            self.assertEqual(audit_status(run_dir, legacy_manifest), "missing audit digest")
 
 
 if __name__ == "__main__":

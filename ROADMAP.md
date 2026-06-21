@@ -165,6 +165,7 @@ Goal: make LoopForge feel like software, not just a CLI.
 - Show approval scope replay status and audit signature placeholders before any execution adapter exists.
 - Show evidence manifest hashes for events, reports, approvals, diffs, command artifacts, changed files, risk scope, and command scope.
 - Show manifest integrity status and tamper issues before any approval can become executable.
+- Show audit digest status, event-chain head, and audit event count for replayable run evidence.
 - Show read-only execution gate readiness for approve, resume, write, commit, push, and delete without executing them.
 - Show execution gate audit events so readiness checks are durable review evidence.
 - Show failures and blocked states.

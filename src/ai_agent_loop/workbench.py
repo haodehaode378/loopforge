@@ -888,9 +888,14 @@ function renderEvidenceManifest(manifest) {
   const core = manifest.core_hashes || {};
   const artifacts = manifest.artifact_hashes || {};
   const issues = manifest.integrity_issues || [];
+  const audit = manifest.audit_chain || {};
   const rows = [
     ['status', manifest.status || 'missing manifest'],
     ['integrity', manifest.integrity_status || manifest.status || 'missing manifest'],
+    ['audit_status', manifest.audit_status || 'missing audit digest'],
+    ['audit_digest', manifest.audit_digest || 'missing'],
+    ['audit_chain_head', audit.head || 'missing'],
+    ['audit_event_count', audit.event_count || 0],
     ['file', manifest.manifest_file || 'evidence_manifest.json'],
     ['replay_source', manifest.scope_replay_source || 'events'],
     ['events.jsonl', core['events.jsonl'] || 'missing'],

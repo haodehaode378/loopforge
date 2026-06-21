@@ -93,6 +93,7 @@ Current workbench behavior:
 - `loopforge approval decide <run_id> ...` only appends a ledger decision or denial after request id and scope validation; it does not execute reserved actions.
 - Approval ledger entries carry scope evidence, replay status, and unsigned audit signature placeholders. Only active approvals with matched scope replay are marked execution-ready, but no execution adapter consumes them yet.
 - `evidence_manifest.json` records hashes for core run files and referenced artifacts. Scope replay prefers manifest scope when present and verified, falls back to event-derived scope for older runs with a visible `missing manifest` status, and reports `tampered` when current evidence hashes differ from the manifest.
+- The evidence manifest also records an event-chain head and `audit_digest` over core hashes, artifact hashes, scope hash, event count, and event-chain head. Older manifests remain readable and show `missing audit digest` instead of being marked tampered solely for lacking audit fields.
 - Execution gate readiness is a pure read-only calculation over approval contract, ledger replay, and manifest integrity. It can mark a reserved action ready for a future adapter, but executable actions remain empty.
 - Execution gate checks can be recorded as `execution.gate.evaluated` audit events. The event trail is review evidence only and does not execute approval, resume, write, commit, push, or delete actions.
 - The UI does not approve, resume, write, call models, log in, or sync.

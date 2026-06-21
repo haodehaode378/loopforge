@@ -51,6 +51,7 @@ def read_evidence_manifest(run_dir: Path) -> dict[str, object]:
     integrity = verify_evidence_manifest(run_dir, data)
     data["integrity_status"] = integrity["integrity_status"]
     data["integrity_issues"] = integrity["integrity_issues"]
+    data["audit_status"] = audit_status(run_dir, data)
     return data
 
 
@@ -73,6 +74,15 @@ def build_evidence_manifest(
         name: file_hash(run_dir / name)
         for name in ("events.jsonl", "report.md", "approvals.jsonl")
     }
+    audit_chain = build_event_chain(resolved_events)
+    digest_inputs = {
+        "version": 1,
+        "core_hashes": core_hashes,
+        "artifact_hashes": artifact_hashes,
+        "scope_hash": scope_hash(scope_parts),
+        "audit_chain_head": audit_chain["head"],
+        "event_count": audit_chain["event_count"],
+    }
     return {
         "version": 1,
         "status": "present",
@@ -87,6 +97,9 @@ def build_evidence_manifest(
         "command_scope": scope_values(scope_parts, "command:"),
         "scope_parts": scope_parts,
         "scope_hash": scope_hash(scope_parts),
+        "audit_chain": audit_chain,
+        "audit_digest": stable_hash(digest_inputs),
+        "audit_status": "verified",
     }
 
 
@@ -135,10 +148,110 @@ def verify_evidence_manifest(
     issues.extend(compare_core_hashes(run_dir, data))
     issues.extend(compare_artifact_hashes(run_dir, data))
     issues.extend(compare_scope_hash(run_dir, data))
+    issues.extend(compare_audit_digest(run_dir, data))
     return {
         "integrity_status": "tampered" if issues else "verified",
         "integrity_issues": issues,
     }
+
+
+def build_event_chain(events: list[dict[str, object]]) -> dict[str, object]:
+    previous = ""
+    records = []
+    for index, event in enumerate(events):
+        current = stable_hash(
+            {
+                "index": index,
+                "previous": previous,
+                "event": event,
+            }
+        )
+        records.append(
+            {
+                "index": index,
+                "name": event.get("name", "unknown"),
+                "status": event.get("status", "unknown"),
+                "hash": current,
+            }
+        )
+        previous = current
+    return {
+        "algorithm": "sha256-json-event-chain-v1",
+        "event_count": len(events),
+        "head": previous,
+        "records": records,
+    }
+
+
+def stable_hash(data: object) -> str:
+    payload = json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def recompute_audit_digest(run_dir: Path, events: list[dict[str, object]]) -> dict[str, object]:
+    scope_parts = approval_scope(events)
+    core_hashes = {
+        name: file_hash(run_dir / name)
+        for name in ("events.jsonl", "report.md", "approvals.jsonl")
+    }
+    audit_chain = build_event_chain(events)
+    digest_inputs = {
+        "version": 1,
+        "core_hashes": core_hashes,
+        "artifact_hashes": collect_artifact_hashes(run_dir, events),
+        "scope_hash": scope_hash(scope_parts),
+        "audit_chain_head": audit_chain["head"],
+        "event_count": audit_chain["event_count"],
+    }
+    return {
+        "audit_chain": audit_chain,
+        "audit_digest": stable_hash(digest_inputs),
+    }
+
+
+def audit_status(run_dir: Path, manifest: dict[str, object]) -> str:
+    if manifest.get("status") != "present":
+        return str(manifest.get("status", "missing manifest"))
+    if not manifest.get("audit_digest") or not manifest.get("audit_chain"):
+        return "missing audit digest"
+    current = recompute_audit_digest(run_dir, read_events(run_dir / "events.jsonl"))
+    if manifest.get("audit_digest") != current["audit_digest"]:
+        return "tampered"
+    chain = manifest.get("audit_chain", {})
+    if not isinstance(chain, dict) or chain.get("head") != current["audit_chain"]["head"]:
+        return "tampered"
+    return "verified"
+
+
+def compare_audit_digest(run_dir: Path, manifest: dict[str, object]) -> list[dict[str, object]]:
+    if not manifest.get("audit_digest") or not manifest.get("audit_chain"):
+        return []
+    current = recompute_audit_digest(run_dir, read_events(run_dir / "events.jsonl"))
+    issues = []
+    if manifest.get("audit_digest") != current["audit_digest"]:
+        issues.append(
+            {
+                "kind": "audit",
+                "path": "audit_digest",
+                "expected": str(manifest.get("audit_digest") or ""),
+                "current": str(current["audit_digest"]),
+                "reason": "audit digest mismatch",
+            }
+        )
+    chain = manifest.get("audit_chain", {})
+    expected_head = chain.get("head") if isinstance(chain, dict) else ""
+    current_head = current["audit_chain"]["head"]
+    if expected_head != current_head:
+        issues.append(
+            {
+                "kind": "audit",
+                "path": "audit_chain.head",
+                "expected": str(expected_head or ""),
+                "current": str(current_head),
+                "reason": "event chain head mismatch",
+            }
+        )
+    return issues
 
 
 def compare_core_hashes(run_dir: Path, manifest: dict[str, object]) -> list[dict[str, object]]:

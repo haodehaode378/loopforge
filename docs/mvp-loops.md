@@ -564,3 +564,27 @@ If incomplete:
 
 - Keep Loop 19 execution gate readiness as the reliable baseline.
 - Do not add execution adapters, clickable approval buttons, or automatic action execution.
+
+## Loop 21: Audit Digest And Event Chain
+
+Goal: make run evidence checks replayable as a digest instead of only individual file hashes.
+
+Must complete:
+
+- Add an event-chain head over `events.jsonl`.
+- Add an `audit_digest` over core hashes, artifact hashes, scope hash, event count, and event-chain head.
+- Recompute audit status as verified, tampered, or missing audit digest.
+- Keep legacy manifests readable without marking them tampered only because they lack audit fields.
+- Show audit status, digest, chain head, and event count in reports and the Workbench.
+- Keep approve, resume, write, commit, push, and delete non-executable.
+
+Verification:
+
+- Unit tests cover event-chain generation, digest recomputation, tamper detection, and legacy manifest compatibility.
+- Report Approval Readiness includes audit digest fields.
+- Workbench snapshot and browser smoke test show audit digest fields.
+
+If incomplete:
+
+- Keep Loop 20 gate audit events as the reliable baseline.
+- Do not add cryptographic signatures, execution adapters, or clickable approval buttons.

@@ -459,14 +459,21 @@ def render_gate_audit(events: list[dict[str, object]]) -> str:
 def render_evidence_manifest(manifest: dict[str, object]) -> str:
     core = manifest.get("core_hashes", {})
     artifacts = manifest.get("artifact_hashes", {})
+    audit_chain = manifest.get("audit_chain", {})
     if not isinstance(core, dict):
         core = {}
     if not isinstance(artifacts, dict):
         artifacts = {}
+    if not isinstance(audit_chain, dict):
+        audit_chain = {}
     return "\n".join(
         [
             f"- status: {manifest.get('status', 'missing manifest')}",
             f"- integrity: {manifest.get('integrity_status', manifest.get('status', 'missing manifest'))}",
+            f"- audit_status: {manifest.get('audit_status', 'missing audit digest')}",
+            f"- audit_digest: {manifest.get('audit_digest', '') or 'missing'}",
+            f"- audit_chain_head: {audit_chain.get('head', '') or 'missing'}",
+            f"- audit_event_count: {audit_chain.get('event_count', 0)}",
             f"- file: {manifest.get('manifest_file', 'evidence_manifest.json')}",
             f"- replay_source: {manifest.get('scope_replay_source', 'events')}",
             f"- events.jsonl: {core.get('events.jsonl', '') or 'missing'}",
