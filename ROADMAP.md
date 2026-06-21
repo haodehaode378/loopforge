@@ -166,6 +166,7 @@ Goal: make LoopForge feel like software, not just a CLI.
 - Show evidence manifest hashes for events, reports, approvals, diffs, command artifacts, changed files, risk scope, and command scope.
 - Show manifest integrity status and tamper issues before any approval can become executable.
 - Show read-only execution gate readiness for approve, resume, write, commit, push, and delete without executing them.
+- Show execution gate audit events so readiness checks are durable review evidence.
 - Show failures and blocked states.
 - Do not approve, retry, skip, resume, write, call models, log in, or sync.
 - Add Chinese default UI with English language switch.

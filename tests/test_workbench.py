@@ -7,8 +7,9 @@ from tempfile import TemporaryDirectory
 from ai_agent_loop import Agent, MultiAgentRunner, RunStore
 from ai_agent_loop.approval import evaluate_approval_contract
 from ai_agent_loop.cli import build_parser, normalize_argv
-from ai_agent_loop.evidence import write_evidence_manifest
-from ai_agent_loop.ledger import approval_scope, build_ledger_decision_record
+from ai_agent_loop.evidence import read_evidence_manifest, scope_from_manifest_or_events, write_evidence_manifest
+from ai_agent_loop.execution_gate import build_execution_gate_event, evaluate_execution_gates
+from ai_agent_loop.ledger import approval_scope, build_ledger_decision_record, read_approval_ledger, summarize_ledger
 from ai_agent_loop.tools import GitTools, ShellTools
 from ai_agent_loop.workbench import build_workbench_snapshot, render_workbench_html
 
@@ -51,6 +52,13 @@ class WorkbenchTests(unittest.TestCase):
                 encoding="utf-8",
             )
             write_evidence_manifest(done_store.run_dir(done.run_id), done_events)
+            manifest = read_evidence_manifest(done_store.run_dir(done.run_id))
+            ledger = summarize_ledger(
+                read_approval_ledger(done_store.run_dir(done.run_id)),
+                scope_from_manifest_or_events(manifest, done_events),
+            )
+            gates = evaluate_execution_gates(evaluate_approval_contract(done_events).to_dict(), ledger, manifest)
+            done_store.append_event(done.run_id, build_execution_gate_event(done.run_id, gates, manifest))
             (project / "app.py").write_text("print('changed')\n", encoding="utf-8")
             diff_run = Agent(store_root=store_root, project_path=project).run("Review diff")
             diff_store = RunStore(store_root, project_path=project)
@@ -97,6 +105,8 @@ class WorkbenchTests(unittest.TestCase):
             self.assertEqual(done_run["approval"]["scope_evidence"]["scope_replay_source"], "manifest")
             self.assertIn("execution_gate", done_run["approval"])
             self.assertEqual(done_run["approval"]["execution_gate"]["executable_actions"], [])
+            self.assertEqual(len(done_run["approval"]["gate_audit_events"]), 1)
+            self.assertEqual(done_run["gate_audit_events"][0]["name"], "execution.gate.evaluated")
             self.assertEqual(done_run["evidence_manifest"]["status"], "present")
             self.assertEqual(done_run["evidence_manifest"]["integrity_status"], "verified")
             self.assertTrue(done_run["evidence_manifest"]["core_hashes"]["events.jsonl"])
@@ -145,6 +155,7 @@ class WorkbenchTests(unittest.TestCase):
             self.assertIn("Scope replay", html)
             self.assertIn("Execution ready", html)
             self.assertIn("Execution gate", html)
+            self.assertIn("Gate audit", html)
             self.assertIn("Evidence manifest", html)
             self.assertIn("变更文件", html)
             self.assertIn("风险决策", html)

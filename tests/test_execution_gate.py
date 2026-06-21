@@ -1,6 +1,10 @@
 import unittest
 
-from ai_agent_loop.execution_gate import evaluate_execution_gates
+from ai_agent_loop.execution_gate import (
+    build_execution_gate_event,
+    collect_execution_gate_events,
+    evaluate_execution_gates,
+)
 
 
 class ExecutionGateTests(unittest.TestCase):
@@ -45,6 +49,21 @@ class ExecutionGateTests(unittest.TestCase):
         self.assertFalse(write_gate["ready_for_execution_adapter"])
         self.assertIn("approval for write is missing", write_gate["reason"])
         self.assertIn("denied", write_gate["reason"])
+
+    def test_gate_event_is_read_only_audit_record(self) -> None:
+        gates = evaluate_execution_gates(
+            {"missing_approvals": [], "resume_eligibility": {"eligible": True}},
+            {"execution_ready_approvals": [{"decision_id": "dec_1"}]},
+            {"integrity_status": "verified"},
+        )
+
+        event = build_execution_gate_event("run-1", gates, {"integrity_status": "verified"})
+
+        self.assertEqual(event["name"], "execution.gate.evaluated")
+        self.assertEqual(event["status"], "done")
+        self.assertEqual(event["metadata"]["run_id"], "run-1")
+        self.assertEqual(event["metadata"]["executable_actions"], [])
+        self.assertEqual(collect_execution_gate_events([event]), [event])
 
 
 if __name__ == "__main__":

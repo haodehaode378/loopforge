@@ -94,6 +94,7 @@ Current workbench behavior:
 - Approval ledger entries carry scope evidence, replay status, and unsigned audit signature placeholders. Only active approvals with matched scope replay are marked execution-ready, but no execution adapter consumes them yet.
 - `evidence_manifest.json` records hashes for core run files and referenced artifacts. Scope replay prefers manifest scope when present and verified, falls back to event-derived scope for older runs with a visible `missing manifest` status, and reports `tampered` when current evidence hashes differ from the manifest.
 - Execution gate readiness is a pure read-only calculation over approval contract, ledger replay, and manifest integrity. It can mark a reserved action ready for a future adapter, but executable actions remain empty.
+- Execution gate checks can be recorded as `execution.gate.evaluated` audit events. The event trail is review evidence only and does not execute approval, resume, write, commit, push, or delete actions.
 - The UI does not approve, resume, write, call models, log in, or sync.
 
 ## Run Store

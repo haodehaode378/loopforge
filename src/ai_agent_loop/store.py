@@ -12,7 +12,7 @@ from ai_agent_loop.evidence import (
     scope_from_manifest_or_events,
     write_evidence_manifest,
 )
-from ai_agent_loop.execution_gate import evaluate_execution_gates
+from ai_agent_loop.execution_gate import collect_execution_gate_events, evaluate_execution_gates
 from ai_agent_loop.goal import Goal
 from ai_agent_loop.critique import render_critique
 from ai_agent_loop.ledger import read_approval_ledger, summarize_ledger
@@ -416,6 +416,7 @@ def render_approval_readiness(
             "Scope replay:\n" + render_scope_replay(ledger["scope_replay"]),
             "Execution readiness:\n" + render_execution_ready(ledger["execution_ready_approvals"]),
             "Execution gate:\n" + render_execution_gate(gates),
+            "Gate audit:\n" + render_gate_audit(collect_execution_gate_events(events)),
             "Changed files:\n" + render_changed_files(changed_files),
             "Diff evidence:\n" + (f"- {len(diff_events)} diff artifact(s)" if diff_events else "- none"),
         ]
@@ -433,6 +434,24 @@ def render_execution_gate(gates: dict[str, object]) -> str:
         state = "ready" if record.get("ready_for_execution_adapter") else "blocked"
         lines.append(
             f"- {record.get('action')}: {state}; executable={record.get('executable')} - {record.get('reason')}"
+        )
+    return "\n".join(lines)
+
+
+def render_gate_audit(events: list[dict[str, object]]) -> str:
+    if not events:
+        return "- none"
+    lines = []
+    for event in events:
+        metadata = event.get("metadata", {})
+        if not isinstance(metadata, dict):
+            metadata = {}
+        lines.append(
+            f"- {metadata.get('created_at', '')}: "
+            f"{metadata.get('manifest_integrity', 'unknown')} integrity, "
+            f"{len(metadata.get('ready_actions', []))} ready, "
+            f"{metadata.get('blocked_action_count', 0)} blocked, "
+            f"{len(metadata.get('executable_actions', []))} executable"
         )
     return "\n".join(lines)
 

@@ -540,3 +540,27 @@ If incomplete:
 
 - Keep Loop 18 manifest integrity as the reliable baseline.
 - Do not add execution adapters or clickable approval buttons.
+
+## Loop 20: Gate Audit Event Trail
+
+Goal: make execution gate checks durable and reviewable without executing reserved actions.
+
+Must complete:
+
+- Add a structured `execution.gate.evaluated` audit event.
+- Add `loopforge approval gate <run_id>` for read-only gate inspection.
+- Add `loopforge approval gate <run_id> --record` to append only the gate audit event.
+- Show gate audit history in Approval Readiness and the Workbench.
+- Keep approve, resume, write, commit, push, and delete non-executable.
+
+Verification:
+
+- Unit tests cover the gate audit event shape.
+- CLI tests prove `approval gate --record` appends one audit event and prints the no-execution guarantee.
+- Report includes Gate audit after recording.
+- Workbench snapshot and browser smoke test show Gate audit.
+
+If incomplete:
+
+- Keep Loop 19 execution gate readiness as the reliable baseline.
+- Do not add execution adapters, clickable approval buttons, or automatic action execution.

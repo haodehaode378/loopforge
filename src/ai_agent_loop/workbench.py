@@ -13,7 +13,7 @@ from ai_agent_loop.evidence import (
     scope_evidence_from_manifest_or_events,
     scope_from_manifest_or_events,
 )
-from ai_agent_loop.execution_gate import evaluate_execution_gates
+from ai_agent_loop.execution_gate import collect_execution_gate_events, evaluate_execution_gates
 from ai_agent_loop.ledger import read_approval_ledger, summarize_ledger
 from ai_agent_loop.project import ProjectRegistry
 from ai_agent_loop.store import (
@@ -117,6 +117,7 @@ def read_run(run_dir: Path) -> dict[str, object]:
         "command_outputs": collect_command_outputs(events),
         "changed_files": changed_files,
         "risk_decisions": risk_decisions,
+        "gate_audit_events": collect_execution_gate_events(events),
         "diff": diff,
         "approval": build_approval_readiness(changed_files, risk_decisions, diff, events, ledger_entries, manifest),
         "approval_ledger": summarize_ledger(ledger_entries, scope_from_manifest_or_events(manifest, events)),
@@ -272,6 +273,7 @@ def build_approval_readiness(
         **contract,
         "ledger": ledger,
         "execution_gate": gates,
+        "gate_audit_events": collect_execution_gate_events(events),
         "scope_evidence": scope_evidence_from_manifest_or_events(evidence_manifest, events),
         "evidence_manifest": evidence_manifest,
         "status": "reserved",
@@ -398,6 +400,10 @@ def serve_workbench(root: str = ".agent", host: str = "127.0.0.1", port: int = 8
             parsed = urlparse(self.path)
             if parsed.path == "/snapshot.json":
                 self.respond_json(build_workbench_snapshot(root))
+                return
+            if parsed.path == "/favicon.ico":
+                self.send_response(204)
+                self.end_headers()
                 return
             if parsed.path in {"/", "/index.html"}:
                 self.respond_html(render_workbench_html(build_workbench_snapshot(root)))
@@ -635,7 +641,7 @@ const labels = {
     ledger: '审批账本', activeApprovals: '有效审批', expiredApprovals: '过期审批',
     revokedApprovals: '撤销审批', deniedApprovals: '拒绝审批', conflictApprovals: '冲突审批',
     scopeEvidence: 'Scope evidence', scopeReplay: 'Scope replay', executionReady: 'Execution ready',
-    evidenceManifest: 'Evidence manifest', executionGate: 'Execution gate'
+    evidenceManifest: 'Evidence manifest', executionGate: 'Execution gate', gateAudit: 'Gate audit'
   },
   en: {
     projects: 'Projects', runs: 'Run history', timeline: 'Event timeline', detail: 'Run detail',
@@ -650,7 +656,7 @@ const labels = {
     ledger: 'Approval ledger', activeApprovals: 'Active approvals', expiredApprovals: 'Expired approvals',
     revokedApprovals: 'Revoked approvals', deniedApprovals: 'Denied approvals', conflictApprovals: 'Conflict approvals',
     scopeEvidence: 'Scope evidence', scopeReplay: 'Scope replay', executionReady: 'Execution ready',
-    evidenceManifest: 'Evidence manifest', executionGate: 'Execution gate'
+    evidenceManifest: 'Evidence manifest', executionGate: 'Execution gate', gateAudit: 'Gate audit'
   }
 };
 let state = { lang: 'zh', project: 0, run: 0, section: 'Overview', query: '', status: 'all', event: 0 };
@@ -705,8 +711,8 @@ function renderRuns(current) {
   return `
     ${renderCharts(project().analytics || {})}
     <div class="toolbar">
-      <input class="search" placeholder="${t('search')}" value="${esc(state.query)}" oninput="setQuery(this.value)">
-      <select class="filter" onchange="setStatus(this.value)">
+      <input id="run-search" name="run-search" class="search" placeholder="${t('search')}" value="${esc(state.query)}" oninput="setQuery(this.value)">
+      <select id="status-filter" name="status-filter" class="filter" onchange="setStatus(this.value)">
         ${['all', 'done', 'failed', 'blocked', 'unknown'].map(value =>
           `<option value="${value}" ${state.status === value ? 'selected' : ''}>${value === 'all' ? t('all') : value}</option>`
         ).join('')}
@@ -808,6 +814,8 @@ function renderApproval(run) {
     ${renderLedger(approval.ledger || run.approval_ledger || {})}
     <div class="section-title">${t('executionGate')}</div>
     ${renderExecutionGate(approval.execution_gate || {})}
+    <div class="section-title">${t('gateAudit')}</div>
+    ${renderGateAudit(approval.gate_audit_events || run.gate_audit_events || [])}
     <div class="section-title">${t('changedFiles')}</div>
     ${renderChangedFiles(run.changed_files || [])}
     <div class="section-title">${t('riskDecision')}</div>
@@ -911,6 +919,17 @@ function renderExecutionGate(gate) {
       ${esc(item.action)} · ${item.ready_for_execution_adapter ? 'ready' : 'blocked'} · executable: ${esc(item.executable)}
       <div class="run-meta">${esc(item.reason || '')}</div>
     </div>`).join('')}</div>`;
+}
+function renderGateAudit(events) {
+  if (!events.length) return `<div class="run-meta">${t('empty')}</div>`;
+  return `<div class="ledger-timeline">${events.map(event => {
+    const meta = event.metadata || {};
+    return `<div class="ledger-item">
+      ${esc(meta.created_at || '')} - ${esc(meta.manifest_integrity || 'unknown')} integrity
+      <div class="run-meta">${esc((meta.ready_actions || []).length)} ready - ${esc(meta.blocked_action_count || 0)} blocked - ${esc((meta.executable_actions || []).length)} executable</div>
+      <div class="run-meta">${esc(event.detail || '')}</div>
+    </div>`;
+  }).join('')}</div>`;
 }
 function renderChangedFiles(files) {
   if (!files.length) return `<div class="run-meta">${t('empty')}</div>`;

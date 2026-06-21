@@ -105,6 +105,14 @@ class CliArgTests(unittest.TestCase):
         self.assertEqual(args.approval_command, "show")
         self.assertEqual(args.run_id, "run-1")
 
+    def test_approval_gate_command_parses_record_flag(self) -> None:
+        args = build_parser().parse_args(normalize_argv(["approval", "gate", "run-1", "--record"]))
+
+        self.assertEqual(args.command, "approval")
+        self.assertEqual(args.approval_command, "gate")
+        self.assertEqual(args.run_id, "run-1")
+        self.assertTrue(args.record)
+
     def test_approval_decide_records_decision_without_execution(self) -> None:
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -261,6 +269,40 @@ class CliArgTests(unittest.TestCase):
             self.assertIn('"executable": false', output)
             self.assertIn('"replay_status": "matched"', output)
             self.assertIn('"signature_status": "unsigned"', output)
+
+    def test_approval_gate_records_audit_event_without_execution(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = root / "project"
+            project.mkdir()
+            store_root = root / ".agent"
+            result = Agent(store_root=store_root, project_path=project).run("Gate audit")
+            run_store = RunStore(store_root, project_path=project)
+            ShellTools(run_store, result.run_id).run("echo gate")
+
+            stdout = io.StringIO()
+            with redirect_stdout(stdout):
+                main(
+                    [
+                        "--store",
+                        str(store_root),
+                        "--project",
+                        str(project),
+                        "approval",
+                        "gate",
+                        result.run_id,
+                        "--record",
+                    ]
+                )
+
+            events = run_store.read_events(result.run_id)
+            gate_events = [event for event in events if event.get("name") == "execution.gate.evaluated"]
+            output = stdout.getvalue()
+            self.assertEqual(len(gate_events), 1)
+            self.assertIn("gate_event_recorded: true", output)
+            self.assertIn("No approval, resume, write, commit, push, or delete action was executed.", output)
+            self.assertEqual(gate_events[0]["metadata"]["executable_actions"], [])
+            self.assertIn("Gate audit", run_store.read_report(result.run_id))
 
 
 if __name__ == "__main__":

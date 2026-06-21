@@ -15,7 +15,7 @@ from ai_agent_loop.evidence import (
     scope_from_manifest_or_events,
     write_evidence_manifest,
 )
-from ai_agent_loop.execution_gate import evaluate_execution_gates
+from ai_agent_loop.execution_gate import build_execution_gate_event, evaluate_execution_gates
 from ai_agent_loop.critique import render_critique
 from ai_agent_loop.ledger import (
     append_approval_ledger,
@@ -81,6 +81,13 @@ def build_parser() -> argparse.ArgumentParser:
     approval_subparsers = approval_parser.add_subparsers(dest="approval_command", required=True)
     show_parser = approval_subparsers.add_parser("show", help="Show approval contract and ledger.")
     show_parser.add_argument("run_id", help="Run ID to inspect for approval readiness.")
+    gate_parser = approval_subparsers.add_parser("gate", help="Show or record execution gate audit evidence.")
+    gate_parser.add_argument("run_id", help="Run ID to inspect for execution gate readiness.")
+    gate_parser.add_argument(
+        "--record",
+        action="store_true",
+        help="Append a read-only execution gate audit event to the run history.",
+    )
     decide_parser = approval_subparsers.add_parser("decide", help="Record an approval ledger decision only.")
     decide_parser.add_argument("run_id", help="Run ID to record a decision for.")
     decide_parser.add_argument("--request-id", required=True)
@@ -168,6 +175,8 @@ def main(argv: list[str] | None = None) -> None:
     if args.command == "approval":
         if args.approval_command == "decide":
             record_approval_decision(args)
+        elif args.approval_command == "gate":
+            show_execution_gate(args.store, args.project, args.run_id, args.record)
         else:
             show_approval(args.store, args.project, args.run_id)
         return
@@ -225,7 +234,7 @@ def normalize_approval_argv(raw_args: list[str], approval_index: int) -> list[st
     if next_index >= len(raw_args):
         return raw_args
     next_value = raw_args[next_index]
-    if next_value in {"show", "decide"}:
+    if next_value in {"show", "decide", "gate"}:
         return raw_args
     if next_value.startswith("-"):
         return raw_args
@@ -345,6 +354,29 @@ def show_approval(store: str, project: str, run_id: str) -> None:
     print_json_lines(ledger["execution_ready_approvals"])
     print("execution_gate:")
     print_json_lines(gates)
+
+
+def show_execution_gate(store: str, project: str, run_id: str, record: bool = False) -> None:
+    run_store = RunStore(store, project_path=project)
+    events = run_store.read_events(run_id)
+    contract = evaluate_approval_contract(events).to_dict()
+    manifest = read_evidence_manifest(run_store.run_dir(run_id))
+    scope = scope_from_manifest_or_events(manifest, events)
+    ledger = summarize_ledger(read_approval_ledger(run_store.run_dir(run_id)), scope)
+    gates = evaluate_execution_gates(contract, ledger, manifest)
+    print(f"run_id: {run_id}")
+    print("execution_gate:")
+    print_json_lines(gates)
+    if not record:
+        print("gate_event_recorded: false")
+        print("No approval, resume, write, commit, push, or delete action was executed.")
+        return
+
+    event = build_execution_gate_event(run_id, gates, manifest)
+    run_store.append_event(run_id, event)
+    print("gate_event_recorded: true")
+    print(f"event_name: {event['name']}")
+    print("No approval, resume, write, commit, push, or delete action was executed.")
 
 
 def record_approval_decision(args: argparse.Namespace) -> None:
