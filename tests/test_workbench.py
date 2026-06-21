@@ -8,6 +8,7 @@ from ai_agent_loop import Agent, MultiAgentRunner, RunStore
 from ai_agent_loop.approval import evaluate_approval_contract
 from ai_agent_loop.cli import build_parser, normalize_argv
 from ai_agent_loop.evidence import read_evidence_manifest, scope_from_manifest_or_events, write_evidence_manifest
+from ai_agent_loop.evidence_bundle import export_evidence_bundle
 from ai_agent_loop.execution_gate import build_execution_gate_event, evaluate_execution_gates
 from ai_agent_loop.ledger import approval_scope, build_ledger_decision_record, read_approval_ledger, summarize_ledger
 from ai_agent_loop.tools import GitTools, ShellTools
@@ -59,6 +60,7 @@ class WorkbenchTests(unittest.TestCase):
             )
             gates = evaluate_execution_gates(evaluate_approval_contract(done_events).to_dict(), ledger, manifest)
             done_store.append_event(done.run_id, build_execution_gate_event(done.run_id, gates, manifest))
+            export_evidence_bundle(done_store.run_dir(done.run_id), done.run_id)
             (project / "app.py").write_text("print('changed')\n", encoding="utf-8")
             diff_run = Agent(store_root=store_root, project_path=project).run("Review diff")
             diff_store = RunStore(store_root, project_path=project)
@@ -128,6 +130,8 @@ class WorkbenchTests(unittest.TestCase):
             self.assertEqual(done_run["evidence_manifest"]["status"], "present")
             self.assertEqual(done_run["evidence_manifest"]["integrity_status"], "verified")
             self.assertEqual(done_run["evidence_manifest"]["audit_status"], "verified")
+            self.assertEqual(done_run["evidence_bundle"]["bundle_count"], 1)
+            self.assertTrue(done_run["evidence_bundle"]["latest"]["bundle_hash"])
             self.assertTrue(done_run["evidence_manifest"]["audit_digest"])
             self.assertTrue(done_run["evidence_manifest"]["audit_chain"]["head"])
             self.assertTrue(done_run["evidence_manifest"]["core_hashes"]["events.jsonl"])
@@ -151,6 +155,7 @@ class WorkbenchTests(unittest.TestCase):
             self.assertIn("Execution gate", diff_data["sections"]["Approval Readiness"])
             self.assertIn("Execution adapter contract", diff_data["sections"]["Approval Readiness"])
             self.assertIn("Evidence manifest", diff_data["sections"]["Approval Readiness"])
+            self.assertIn("Evidence Bundle", done_run["sections"])
             self.assertIn("Change-set Critique", diff_data["sections"])
             self.assertTrue(diff_data["risk_decisions"])
 
@@ -190,6 +195,8 @@ class WorkbenchTests(unittest.TestCase):
             self.assertIn("execute_supported", html)
             self.assertIn("Gate audit", html)
             self.assertIn("Evidence manifest", html)
+            self.assertIn("Evidence bundle", html)
+            self.assertIn("latest_bundle_hash", html)
             self.assertIn("audit_status", html)
             self.assertIn("audit_digest", html)
             self.assertIn("audit_chain_head", html)

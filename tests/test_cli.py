@@ -116,6 +116,13 @@ class CliArgTests(unittest.TestCase):
         self.assertEqual(args.command, "execution")
         self.assertEqual(args.run_id, "run-1")
 
+    def test_evidence_bundle_command_parses_run_id(self) -> None:
+        args = build_parser().parse_args(normalize_argv(["evidence", "bundle", "run-1"]))
+
+        self.assertEqual(args.command, "evidence")
+        self.assertEqual(args.evidence_command, "bundle")
+        self.assertEqual(args.run_id, "run-1")
+
     def test_critique_changes_reads_current_git_diff(self) -> None:
         with TemporaryDirectory() as temp_dir:
             project = Path(temp_dir) / "project"
@@ -250,6 +257,48 @@ class CliArgTests(unittest.TestCase):
             self.assertIn("reserved execution adapter contract", output)
             self.assertIn('"executable_actions": []', output)
             self.assertIn("No approval, resume, write, commit, push, or delete action was executed.", output)
+
+    def test_evidence_bundle_exports_and_lists_without_execution(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = root / "project"
+            project.mkdir()
+            store_root = root / ".agent"
+            result = Agent(store_root=store_root, project_path=project).run("Evidence bundle")
+            run_store = RunStore(store_root, project_path=project)
+            ShellTools(run_store, result.run_id).run("echo bundle")
+
+            export_stdout = io.StringIO()
+            with redirect_stdout(export_stdout):
+                main(
+                    [
+                        "--store",
+                        str(store_root),
+                        "--project",
+                        str(project),
+                        "evidence",
+                        "bundle",
+                        result.run_id,
+                    ]
+                )
+            self.assertIn("evidence_bundle_exported: true", export_stdout.getvalue())
+            self.assertIn("No approval, resume, write, commit, push, or delete action was executed.", export_stdout.getvalue())
+
+            show_stdout = io.StringIO()
+            with redirect_stdout(show_stdout):
+                main(
+                    [
+                        "--store",
+                        str(store_root),
+                        "--project",
+                        str(project),
+                        "evidence",
+                        "show",
+                        result.run_id,
+                    ]
+                )
+            self.assertIn("evidence_bundles:", show_stdout.getvalue())
+            self.assertIn("bundle_hash", show_stdout.getvalue())
 
     def test_approval_decide_rejects_duplicate_active_decision(self) -> None:
         with TemporaryDirectory() as temp_dir:

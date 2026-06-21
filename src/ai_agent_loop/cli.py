@@ -16,6 +16,7 @@ from ai_agent_loop.evidence import (
     scope_from_manifest_or_events,
     write_evidence_manifest,
 )
+from ai_agent_loop.evidence_bundle import export_evidence_bundle
 from ai_agent_loop.execution_adapter import evaluate_execution_adapter_contract
 from ai_agent_loop.execution_gate import build_execution_gate_event, evaluate_execution_gates
 from ai_agent_loop.critique import changed_files_from_diff_name_output, render_change_set_critique, render_critique
@@ -88,6 +89,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     execution_parser = subparsers.add_parser("execution", help="Show reserved execution adapter contract.")
     execution_parser.add_argument("run_id", help="Run ID to inspect for execution adapter readiness.")
+
+    evidence_parser = subparsers.add_parser("evidence", help="Show or export read-only evidence bundles.")
+    evidence_subparsers = evidence_parser.add_subparsers(dest="evidence_command", required=True)
+    evidence_show_parser = evidence_subparsers.add_parser("show", help="Show evidence bundle exports.")
+    evidence_show_parser.add_argument("run_id", help="Run ID to inspect for evidence bundles.")
+    evidence_bundle_parser = evidence_subparsers.add_parser("bundle", help="Export a read-only evidence bundle.")
+    evidence_bundle_parser.add_argument("run_id", help="Run ID to export.")
 
     approval_parser = subparsers.add_parser("approval", help="Show or record approval ledger decisions.")
     approval_subparsers = approval_parser.add_subparsers(dest="approval_command", required=True)
@@ -196,6 +204,13 @@ def main(argv: list[str] | None = None) -> None:
         show_execution_adapter(args.store, args.project, args.run_id)
         return
 
+    if args.command == "evidence":
+        if args.evidence_command == "bundle":
+            export_run_evidence_bundle(args.store, args.project, args.run_id)
+        else:
+            show_evidence_bundles(args.store, args.project, args.run_id)
+        return
+
     if args.command == "approval":
         if args.approval_command == "decide":
             record_approval_decision(args)
@@ -241,6 +256,7 @@ def normalize_argv(argv: list[str] | None) -> list[str]:
         "report",
         "critique",
         "execution",
+        "evidence",
         "approval",
         "multi",
         "workbench",
@@ -407,6 +423,47 @@ def show_execution_adapter(store: str, project: str, run_id: str) -> None:
     print("execution_adapter_contract:")
     print_json_lines(adapters)
     print("No approval, resume, write, commit, push, or delete action was executed.")
+
+
+def export_run_evidence_bundle(store: str, project: str, run_id: str) -> None:
+    run_store = RunStore(store, project_path=project)
+    bundle = export_evidence_bundle(run_store.run_dir(run_id), run_id)
+    print("evidence_bundle_exported: true")
+    print(f"run_id: {run_id}")
+    print(f"bundle_dir: {bundle['bundle_dir']}")
+    print(f"zip_path: {bundle['zip_path']}")
+    print(f"zip_sha256: {bundle['zip_sha256']}")
+    print(f"file_count: {len(bundle['files'])}")
+    print("No approval, resume, write, commit, push, or delete action was executed.")
+
+
+def show_evidence_bundles(store: str, project: str, run_id: str) -> None:
+    run_store = RunStore(store, project_path=project)
+    run_dir = run_store.run_dir(run_id)
+    bundle_root = run_dir / "evidence_bundle"
+    print(f"run_id: {run_id}")
+    print("evidence_bundles:")
+    if not bundle_root.exists():
+        print("- none")
+        return
+    for manifest_path in sorted(bundle_root.glob("*/bundle_manifest.json"), reverse=True):
+        try:
+            data = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        print(
+            "- "
+            + json.dumps(
+                {
+                    "bundle_id": data.get("bundle_id"),
+                    "bundle_hash": data.get("bundle_hash"),
+                    "file_count": len(data.get("files", [])),
+                    "manifest": str(manifest_path),
+                },
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+        )
 
 
 def show_approval(store: str, project: str, run_id: str) -> None:

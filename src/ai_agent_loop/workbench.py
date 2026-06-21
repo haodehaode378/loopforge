@@ -23,12 +23,14 @@ from ai_agent_loop.store import (
     ensure_summary_headings,
     infer_status,
     render_change_set_critique_for_events,
+    render_evidence_bundle_summary,
     render_approval_readiness,
     render_automation_summary,
     render_git_summary,
     render_multi_agent_summary,
     replace_approval_readiness,
     replace_change_set_critique,
+    replace_evidence_bundle,
     replace_automation_summary,
     replace_git_summary,
     replace_multi_agent_summary,
@@ -128,6 +130,7 @@ def read_run(run_dir: Path) -> dict[str, object]:
         "gate_audit_events": collect_execution_gate_events(events),
         "diff": diff,
         "approval": build_approval_readiness(changed_files, risk_decisions, diff, events, ledger_entries, manifest),
+        "evidence_bundle": read_evidence_bundle_summary(run_dir),
         "approval_ledger": summarize_ledger(ledger_entries, scope_from_manifest_or_events(manifest, events)),
         "evidence_manifest": manifest,
         "parent_run_id": metadata.get("parent_run_id", ""),
@@ -365,12 +368,31 @@ def read_dynamic_report(
     report = replace_git_summary(report, render_git_summary(events))
     report = replace_multi_agent_summary(report, render_multi_agent_summary(events))
     report = replace_approval_readiness(report, render_approval_readiness(events, ledger_entries or [], manifest))
+    report = replace_evidence_bundle(report, render_evidence_bundle_summary(path.parent))
     report = replace_change_set_critique(report, render_change_set_critique_for_events(events))
     report = replace_sharp_review(report, render_critique(events))
     blocked_reason = find_blocked_reason(events)
     if blocked_reason and "## Blocked Reason" not in report:
         report += f"\n## Blocked Reason\n\n{blocked_reason}\n"
     return report
+
+
+def read_evidence_bundle_summary(run_dir: Path) -> dict[str, object]:
+    bundle_root = run_dir / "evidence_bundle"
+    if not bundle_root.exists():
+        return {"bundle_count": 0, "latest": {}}
+    manifests = sorted(bundle_root.glob("*/bundle_manifest.json"), reverse=True)
+    if not manifests:
+        return {"bundle_count": 0, "latest": {}}
+    try:
+        latest = json.loads(manifests[0].read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        latest = {}
+    return {
+        "bundle_count": len(manifests),
+        "latest": latest,
+        "zip_path": str(run_dir / f"evidence_bundle-{latest.get('bundle_id')}.zip") if latest else "",
+    }
 
 
 def build_current_change_set_critique(projects: list[dict[str, object]]) -> dict[str, object]:
@@ -677,7 +699,7 @@ const labels = {
     ledger: '审批账本', activeApprovals: '有效审批', expiredApprovals: '过期审批',
     revokedApprovals: '撤销审批', deniedApprovals: '拒绝审批', conflictApprovals: '冲突审批',
     scopeEvidence: 'Scope evidence', scopeReplay: 'Scope replay', executionReady: 'Execution ready',
-    evidenceManifest: 'Evidence manifest', executionGate: 'Execution gate', executionAdapter: 'Execution adapter contract', gateAudit: 'Gate audit',
+    evidenceManifest: 'Evidence manifest', evidenceBundle: 'Evidence bundle', executionGate: 'Execution gate', executionAdapter: 'Execution adapter contract', gateAudit: 'Gate audit',
     ledgerIntegrity: 'Ledger integrity'
   },
   en: {
@@ -693,7 +715,7 @@ const labels = {
     ledger: 'Approval ledger', activeApprovals: 'Active approvals', expiredApprovals: 'Expired approvals',
     revokedApprovals: 'Revoked approvals', deniedApprovals: 'Denied approvals', conflictApprovals: 'Conflict approvals',
     scopeEvidence: 'Scope evidence', scopeReplay: 'Scope replay', executionReady: 'Execution ready',
-    evidenceManifest: 'Evidence manifest', executionGate: 'Execution gate', executionAdapter: 'Execution adapter contract', gateAudit: 'Gate audit',
+    evidenceManifest: 'Evidence manifest', evidenceBundle: 'Evidence bundle', executionGate: 'Execution gate', executionAdapter: 'Execution adapter contract', gateAudit: 'Gate audit',
     ledgerIntegrity: 'Ledger integrity'
   }
 };
@@ -815,6 +837,7 @@ function renderDetail(run) {
     <h2>${esc(run.goal)}</h2>
     <div><span class="status ${esc(run.effective_status)}">${esc(run.effective_status)}</span>${esc(run.run_id)}</div>
     ${renderProvider(run.provider || {})}
+    ${renderEvidenceBundle(run.evidence_bundle || {})}
     ${renderApproval(run)}
     ${renderTree(run)}
     <div class="tabs">${Object.keys(sections).map(name => `
@@ -830,6 +853,16 @@ function renderProvider(provider) {
       ${providerCard('model', provider.model)}
       ${providerCard('latency_ms', provider.latency_ms)}
       ${providerCard('tokens/cost', `${Number(provider.input_tokens || 0) + Number(provider.output_tokens || 0)} / $${Number(provider.cost_usd || 0).toFixed(4)}`)}
+    </div>`;
+}
+function renderEvidenceBundle(bundle) {
+  const latest = bundle.latest || {};
+  return `<div class="section-title">${t('evidenceBundle')}</div>
+  <div class="provider-grid">
+      ${providerCard('bundle_count', bundle.bundle_count || 0)}
+      ${providerCard('latest_bundle_id', latest.bundle_id || '')}
+      ${providerCard('latest_bundle_hash', latest.bundle_hash || '')}
+      ${providerCard('zip_path', bundle.zip_path || '')}
     </div>`;
 }
 function providerCard(label, value) {

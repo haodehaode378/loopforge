@@ -710,3 +710,28 @@ If incomplete:
 
 - Keep Loop 25 execution adapter contract as the reliable baseline.
 - Do not use change-set critique as an automatic approval, resume, or execution gate.
+
+## Loop 27: Evidence Bundle Export
+
+Goal: export a read-only run evidence package for audit, reviewer agent handoff, and failure replay.
+
+Must complete:
+
+- Add an evidence bundle exporter that copies existing run evidence into a new timestamped bundle directory.
+- Include `goal.json`, `events.jsonl`, `report.md`, `evidence_manifest.json`, `approvals.jsonl`, and referenced artifact files when present.
+- Generate `bundle_manifest.json` with file hashes, source integrity status, audit status, and no-execution guarantee.
+- Generate a zip archive for handoff without deleting previous bundle exports.
+- Add `loopforge evidence bundle <run_id>` and `loopforge evidence show <run_id>`.
+- Show evidence bundle status in reports and the Workbench.
+- Keep approve, resume, write, commit, push, and delete non-executable.
+
+Verification:
+
+- Unit tests cover bundle file copying, manifest generation, and zip contents.
+- CLI tests cover bundle export and listing.
+- Workbench/report tests show bundle count and latest bundle hash.
+
+If incomplete:
+
+- Keep Loop 26 change-set critique as the reliable baseline.
+- Do not use evidence bundles as approval, resume, or execution authority.

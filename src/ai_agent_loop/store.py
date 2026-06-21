@@ -119,6 +119,7 @@ class RunStore:
         ledger = read_approval_ledger(self.run_dir(run_id))
         manifest = read_evidence_manifest(self.run_dir(run_id))
         report = replace_approval_readiness(report, render_approval_readiness(events, ledger, manifest))
+        report = replace_evidence_bundle(report, render_evidence_bundle_summary(self.run_dir(run_id)))
         report = replace_change_set_critique(report, render_change_set_critique_for_events(events))
         report = replace_sharp_review(report, render_critique(events))
         blocked_reason = find_blocked_reason(events)
@@ -203,6 +204,7 @@ def render_report(result: LoopResult) -> str:
         f"## Git Summary\n\nNo git actions recorded.\n\n"
         f"## Multi-Agent Summary\n\nNo multi-agent coordination recorded.\n\n"
         f"## Approval Readiness\n\n{render_approval_readiness([step.to_dict() for step in result.steps])}\n\n"
+        f"## Evidence Bundle\n\n{render_evidence_bundle_summary(Path(result.run_id))}\n\n"
         f"## Change-set Critique\n\n{change_critique}\n\n"
         f"## Sharp Review\n\n{critique}\n\n"
         f"## Loop Trace\n\n{steps}\n"
@@ -531,6 +533,30 @@ def render_evidence_manifest(manifest: dict[str, object]) -> str:
     )
 
 
+def render_evidence_bundle_summary(run_dir: Path) -> str:
+    bundle_root = run_dir / "evidence_bundle"
+    if not bundle_root.exists():
+        return "- none"
+    manifests = sorted(bundle_root.glob("*/bundle_manifest.json"), reverse=True)
+    if not manifests:
+        return "- none"
+    latest_path = manifests[0]
+    try:
+        latest = json.loads(latest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return f"- bundle_count: {len(manifests)}\n- latest: unreadable"
+    zip_path = run_dir / f"evidence_bundle-{latest.get('bundle_id')}.zip"
+    return "\n".join(
+        [
+            f"- bundle_count: {len(manifests)}",
+            f"- latest_bundle_id: {latest.get('bundle_id', '')}",
+            f"- latest_bundle_hash: {latest.get('bundle_hash', '')}",
+            f"- latest_file_count: {len(latest.get('files', []))}",
+            f"- latest_zip: {zip_path}",
+        ]
+    )
+
+
 def render_scope_evidence(evidence: dict[str, object]) -> str:
     lines = [
         f"- scope_hash: {evidence.get('scope_hash')}",
@@ -773,6 +799,8 @@ def ensure_summary_headings(report: str) -> str:
         additions.append("## Multi-Agent Summary\n\nNo multi-agent coordination recorded.\n")
     if "## Approval Readiness" not in report:
         additions.append("## Approval Readiness\n\n" + render_approval_readiness([]) + "\n")
+    if "## Evidence Bundle" not in report:
+        additions.append("## Evidence Bundle\n\n- none\n")
     if "## Change-set Critique" not in report:
         additions.append("## Change-set Critique\n\n" + render_change_set_critique_for_events([]) + "\n")
     if not additions:
@@ -800,6 +828,16 @@ def replace_change_set_critique(report: str, critique: str) -> str:
     before, rest = report.split(heading, 1)
     _, after = rest.split(next_heading, 1)
     return f"{before}{heading}\n\n{critique}\n\n{next_heading}{after}"
+
+
+def replace_evidence_bundle(report: str, summary: str) -> str:
+    heading = "## Evidence Bundle"
+    next_heading = "\n## Change-set Critique"
+    if heading not in report or next_heading not in report:
+        return report
+    before, rest = report.split(heading, 1)
+    _, after = rest.split(next_heading, 1)
+    return f"{before}{heading}\n\n{summary}\n\n{next_heading}{after}"
 
 
 def replace_automation_summary(report: str, summary: str) -> str:
@@ -834,7 +872,7 @@ def replace_multi_agent_summary(report: str, summary: str) -> str:
 
 def replace_approval_readiness(report: str, summary: str) -> str:
     heading = "## Approval Readiness"
-    next_heading = "\n## Change-set Critique"
+    next_heading = "\n## Evidence Bundle"
     if heading not in report or next_heading not in report:
         return report
     before, rest = report.split(heading, 1)
