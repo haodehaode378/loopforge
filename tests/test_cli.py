@@ -123,6 +123,13 @@ class CliArgTests(unittest.TestCase):
         self.assertEqual(args.evidence_command, "bundle")
         self.assertEqual(args.run_id, "run-1")
 
+    def test_reviewer_handoff_command_parses_run_id(self) -> None:
+        args = build_parser().parse_args(normalize_argv(["reviewer", "handoff", "run-1"]))
+
+        self.assertEqual(args.command, "reviewer")
+        self.assertEqual(args.reviewer_command, "handoff")
+        self.assertEqual(args.run_id, "run-1")
+
     def test_critique_changes_reads_current_git_diff(self) -> None:
         with TemporaryDirectory() as temp_dir:
             project = Path(temp_dir) / "project"
@@ -299,6 +306,34 @@ class CliArgTests(unittest.TestCase):
                 )
             self.assertIn("evidence_bundles:", show_stdout.getvalue())
             self.assertIn("bundle_hash", show_stdout.getvalue())
+
+    def test_reviewer_handoff_exports_and_lists_without_execution(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = root / "project"
+            project.mkdir()
+            store_root = root / ".agent"
+            result = Agent(store_root=store_root, project_path=project).run("Reviewer handoff")
+            run_store = RunStore(store_root, project_path=project)
+            ShellTools(run_store, result.run_id).run("echo reviewer")
+            with redirect_stdout(io.StringIO()):
+                main(["--store", str(store_root), "--project", str(project), "evidence", "bundle", result.run_id])
+
+            export_stdout = io.StringIO()
+            with redirect_stdout(export_stdout):
+                main(["--store", str(store_root), "--project", str(project), "reviewer", "handoff", result.run_id])
+
+            output = export_stdout.getvalue()
+            self.assertIn("reviewer_handoff_exported: true", output)
+            self.assertIn("reviewer_input:", output)
+            self.assertIn("No approval, resume, write, commit, push, or delete action was executed.", output)
+
+            show_stdout = io.StringIO()
+            with redirect_stdout(show_stdout):
+                main(["--store", str(store_root), "--project", str(project), "reviewer", "show", result.run_id])
+
+            self.assertIn("reviewer_handoffs:", show_stdout.getvalue())
+            self.assertIn("handoff_hash", show_stdout.getvalue())
 
     def test_approval_decide_rejects_duplicate_active_decision(self) -> None:
         with TemporaryDirectory() as temp_dir:

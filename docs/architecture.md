@@ -221,6 +221,7 @@ Current policy behavior:
 - Execution adapter contracts are display-only: adapters can be ready or blocked, but execute support and executable actions remain disabled.
 - Change-set critique can review changed files, diff evidence, test summaries, risk summaries, and smoke summaries, but it is not an execution or approval gate.
 - Evidence bundle export packages run evidence into timestamped bundle directories and zip files for audit handoff, but does not grant approval or execute reserved actions.
+- Reviewer handoff packages convert run evidence into reviewer-agent inputs and prompts, but they are read-only review material and do not grant approval or execute reserved actions.
 
 High-risk examples:
 

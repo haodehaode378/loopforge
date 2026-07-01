@@ -210,9 +210,10 @@ def critique_change_risk(changed_files: list[str], diff_text: str, risk_summary:
         return "Risk is high because private files are included in the change-set."
     risky_terms = ("subprocess", "remove-item", "git push", "delete", "approve", "resume")
     found = [term for term in risky_terms if term in lower_diff]
-    if found and "no execution" not in lower_risk and "reserved" not in lower_risk:
+    no_execution_evidence = "no execution" in lower_risk or "no-execution" in lower_risk
+    if found and not no_execution_evidence and "reserved" not in lower_risk:
         return f"Risk needs review because the diff mentions sensitive actions: {', '.join(found)}."
-    if "no execution" in lower_risk or "reserved" in lower_risk:
+    if no_execution_evidence or "reserved" in lower_risk:
         return "Risk is controlled by explicit no-execution or reserved-action evidence."
     return "No obvious high-risk operation was detected from the supplied change-set evidence."
 

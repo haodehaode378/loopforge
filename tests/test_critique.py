@@ -86,6 +86,15 @@ class CritiqueTests(unittest.TestCase):
         self.assertIn("private files", critique["Scope control"])
         self.assertIn("private files", critique["Risk review"])
 
+    def test_change_set_critique_accepts_hyphenated_no_execution_evidence(self) -> None:
+        critique = build_change_set_critique(
+            ["src/ai_agent_loop/reviewer_handoff.py"],
+            diff_text="+No approve, resume, write, commit, push, or delete action was executed.",
+            risk_summary="reviewer handoff is read-only and no-execution",
+        )
+
+        self.assertIn("Risk is controlled", critique["Risk review"])
+
 
 if __name__ == "__main__":
     unittest.main()

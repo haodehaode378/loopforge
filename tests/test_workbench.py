@@ -11,6 +11,8 @@ from ai_agent_loop.evidence import read_evidence_manifest, scope_from_manifest_o
 from ai_agent_loop.evidence_bundle import export_evidence_bundle
 from ai_agent_loop.execution_gate import build_execution_gate_event, evaluate_execution_gates
 from ai_agent_loop.ledger import approval_scope, build_ledger_decision_record, read_approval_ledger, summarize_ledger
+from ai_agent_loop.reviewer_handoff import export_reviewer_handoff
+from ai_agent_loop.store import render_approval_readiness, render_change_set_critique_for_events
 from ai_agent_loop.tools import GitTools, ShellTools
 from ai_agent_loop.workbench import build_workbench_snapshot, render_workbench_html
 
@@ -61,6 +63,12 @@ class WorkbenchTests(unittest.TestCase):
             gates = evaluate_execution_gates(evaluate_approval_contract(done_events).to_dict(), ledger, manifest)
             done_store.append_event(done.run_id, build_execution_gate_event(done.run_id, gates, manifest))
             export_evidence_bundle(done_store.run_dir(done.run_id), done.run_id)
+            export_reviewer_handoff(
+                done_store.run_dir(done.run_id),
+                done.run_id,
+                approval_readiness=render_approval_readiness(done_events, [ledger_entry], manifest),
+                change_set_critique=render_change_set_critique_for_events(done_events),
+            )
             (project / "app.py").write_text("print('changed')\n", encoding="utf-8")
             diff_run = Agent(store_root=store_root, project_path=project).run("Review diff")
             diff_store = RunStore(store_root, project_path=project)
@@ -132,6 +140,8 @@ class WorkbenchTests(unittest.TestCase):
             self.assertEqual(done_run["evidence_manifest"]["audit_status"], "verified")
             self.assertEqual(done_run["evidence_bundle"]["bundle_count"], 1)
             self.assertTrue(done_run["evidence_bundle"]["latest"]["bundle_hash"])
+            self.assertEqual(done_run["reviewer_handoff"]["handoff_count"], 1)
+            self.assertTrue(done_run["reviewer_handoff"]["latest"]["handoff_hash"])
             self.assertTrue(done_run["evidence_manifest"]["audit_digest"])
             self.assertTrue(done_run["evidence_manifest"]["audit_chain"]["head"])
             self.assertTrue(done_run["evidence_manifest"]["core_hashes"]["events.jsonl"])
@@ -156,6 +166,7 @@ class WorkbenchTests(unittest.TestCase):
             self.assertIn("Execution adapter contract", diff_data["sections"]["Approval Readiness"])
             self.assertIn("Evidence manifest", diff_data["sections"]["Approval Readiness"])
             self.assertIn("Evidence Bundle", done_run["sections"])
+            self.assertIn("Reviewer Handoff", done_run["sections"])
             self.assertIn("Change-set Critique", diff_data["sections"])
             self.assertTrue(diff_data["risk_decisions"])
 
@@ -197,6 +208,8 @@ class WorkbenchTests(unittest.TestCase):
             self.assertIn("Evidence manifest", html)
             self.assertIn("Evidence bundle", html)
             self.assertIn("latest_bundle_hash", html)
+            self.assertIn("Reviewer handoff", html)
+            self.assertIn("latest_handoff_hash", html)
             self.assertIn("audit_status", html)
             self.assertIn("audit_digest", html)
             self.assertIn("audit_chain_head", html)

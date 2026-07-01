@@ -30,7 +30,8 @@ from ai_agent_loop.ledger import (
     validate_decision_record,
 )
 from ai_agent_loop.multi_agent import MultiAgentRunner
-from ai_agent_loop.store import RunStore
+from ai_agent_loop.reviewer_handoff import export_reviewer_handoff, read_reviewer_handoff_summary
+from ai_agent_loop.store import RunStore, render_approval_readiness, render_change_set_critique_for_events
 from ai_agent_loop.tools import FileTools, GitTools, ShellTools
 from ai_agent_loop.workbench import build_workbench_snapshot, serve_workbench
 
@@ -96,6 +97,13 @@ def build_parser() -> argparse.ArgumentParser:
     evidence_show_parser.add_argument("run_id", help="Run ID to inspect for evidence bundles.")
     evidence_bundle_parser = evidence_subparsers.add_parser("bundle", help="Export a read-only evidence bundle.")
     evidence_bundle_parser.add_argument("run_id", help="Run ID to export.")
+
+    reviewer_parser = subparsers.add_parser("reviewer", help="Generate or show read-only reviewer handoff packages.")
+    reviewer_subparsers = reviewer_parser.add_subparsers(dest="reviewer_command", required=True)
+    reviewer_handoff_parser = reviewer_subparsers.add_parser("handoff", help="Generate reviewer handoff files.")
+    reviewer_handoff_parser.add_argument("run_id", help="Run ID to package for reviewer handoff.")
+    reviewer_show_parser = reviewer_subparsers.add_parser("show", help="Show reviewer handoff files.")
+    reviewer_show_parser.add_argument("run_id", help="Run ID to inspect for reviewer handoffs.")
 
     approval_parser = subparsers.add_parser("approval", help="Show or record approval ledger decisions.")
     approval_subparsers = approval_parser.add_subparsers(dest="approval_command", required=True)
@@ -211,6 +219,13 @@ def main(argv: list[str] | None = None) -> None:
             show_evidence_bundles(args.store, args.project, args.run_id)
         return
 
+    if args.command == "reviewer":
+        if args.reviewer_command == "handoff":
+            export_run_reviewer_handoff(args.store, args.project, args.run_id)
+        else:
+            show_reviewer_handoffs(args.store, args.project, args.run_id)
+        return
+
     if args.command == "approval":
         if args.approval_command == "decide":
             record_approval_decision(args)
@@ -257,6 +272,7 @@ def normalize_argv(argv: list[str] | None) -> list[str]:
         "critique",
         "execution",
         "evidence",
+        "reviewer",
         "approval",
         "multi",
         "workbench",
@@ -464,6 +480,51 @@ def show_evidence_bundles(store: str, project: str, run_id: str) -> None:
                 sort_keys=True,
             )
         )
+
+
+def export_run_reviewer_handoff(store: str, project: str, run_id: str) -> None:
+    run_store = RunStore(store, project_path=project)
+    events = run_store.read_events(run_id)
+    ledger = read_approval_ledger(run_store.run_dir(run_id))
+    manifest = read_evidence_manifest(run_store.run_dir(run_id))
+    handoff = export_reviewer_handoff(
+        run_store.run_dir(run_id),
+        run_id,
+        approval_readiness=render_approval_readiness(events, ledger, manifest),
+        change_set_critique=render_change_set_critique_for_events(events),
+    )
+    print("reviewer_handoff_exported: true")
+    print(f"run_id: {run_id}")
+    print(f"handoff_dir: {handoff['handoff_dir']}")
+    print(f"reviewer_input: {handoff['reviewer_input']}")
+    print(f"reviewer_prompt: {handoff['reviewer_prompt']}")
+    print(f"reviewer_manifest: {handoff['reviewer_manifest']}")
+    print(f"handoff_hash: {handoff['handoff_hash']}")
+    print("No approval, resume, write, commit, push, or delete action was executed.")
+
+
+def show_reviewer_handoffs(store: str, project: str, run_id: str) -> None:
+    run_store = RunStore(store, project_path=project)
+    summary = read_reviewer_handoff_summary(run_store.run_dir(run_id))
+    print(f"run_id: {run_id}")
+    print("reviewer_handoffs:")
+    latest = summary.get("latest", {})
+    if not summary.get("handoff_count") or not isinstance(latest, dict):
+        print("- none")
+        return
+    print(
+        "- "
+        + json.dumps(
+            {
+                "handoff_count": summary.get("handoff_count"),
+                "handoff_id": latest.get("handoff_id"),
+                "handoff_hash": latest.get("handoff_hash"),
+                "manifest": summary.get("manifest_path"),
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+    )
 
 
 def show_approval(store: str, project: str, run_id: str) -> None:

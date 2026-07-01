@@ -11,6 +11,7 @@ from ai_agent_loop.approval import (
 from ai_agent_loop.autonomous import AutonomousRunner
 from ai_agent_loop.critique import build_change_set_critique, build_critique, render_change_set_critique, render_critique
 from ai_agent_loop.evidence_bundle import export_evidence_bundle
+from ai_agent_loop.reviewer_handoff import export_reviewer_handoff
 from ai_agent_loop.goal import Goal
 from ai_agent_loop.ledger import read_approval_ledger, summarize_ledger
 from ai_agent_loop.loop import AgentStep, LoopResult, run_loop
@@ -54,6 +55,7 @@ __all__ = [
     "ResumeEligibility",
     "evaluate_approval_contract",
     "export_evidence_bundle",
+    "export_reviewer_handoff",
     "resolve_provider",
     "run_loop",
     "summarize_ledger",

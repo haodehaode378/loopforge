@@ -28,6 +28,7 @@ from ai_agent_loop.store import (
     render_automation_summary,
     render_git_summary,
     render_multi_agent_summary,
+    replace_reviewer_handoff,
     replace_approval_readiness,
     replace_change_set_critique,
     replace_evidence_bundle,
@@ -37,6 +38,7 @@ from ai_agent_loop.store import (
     replace_sharp_review,
     replace_status_line,
 )
+from ai_agent_loop.reviewer_handoff import read_reviewer_handoff_summary, render_reviewer_handoff_summary
 from ai_agent_loop.critique import changed_files_from_diff_name_output, render_change_set_critique, render_critique
 
 
@@ -131,6 +133,7 @@ def read_run(run_dir: Path) -> dict[str, object]:
         "diff": diff,
         "approval": build_approval_readiness(changed_files, risk_decisions, diff, events, ledger_entries, manifest),
         "evidence_bundle": read_evidence_bundle_summary(run_dir),
+        "reviewer_handoff": read_reviewer_handoff_summary(run_dir),
         "approval_ledger": summarize_ledger(ledger_entries, scope_from_manifest_or_events(manifest, events)),
         "evidence_manifest": manifest,
         "parent_run_id": metadata.get("parent_run_id", ""),
@@ -369,6 +372,7 @@ def read_dynamic_report(
     report = replace_multi_agent_summary(report, render_multi_agent_summary(events))
     report = replace_approval_readiness(report, render_approval_readiness(events, ledger_entries or [], manifest))
     report = replace_evidence_bundle(report, render_evidence_bundle_summary(path.parent))
+    report = replace_reviewer_handoff(report, render_reviewer_handoff_summary(path.parent))
     report = replace_change_set_critique(report, render_change_set_critique_for_events(events))
     report = replace_sharp_review(report, render_critique(events))
     blocked_reason = find_blocked_reason(events)
@@ -699,7 +703,7 @@ const labels = {
     ledger: '审批账本', activeApprovals: '有效审批', expiredApprovals: '过期审批',
     revokedApprovals: '撤销审批', deniedApprovals: '拒绝审批', conflictApprovals: '冲突审批',
     scopeEvidence: 'Scope evidence', scopeReplay: 'Scope replay', executionReady: 'Execution ready',
-    evidenceManifest: 'Evidence manifest', evidenceBundle: 'Evidence bundle', executionGate: 'Execution gate', executionAdapter: 'Execution adapter contract', gateAudit: 'Gate audit',
+    evidenceManifest: 'Evidence manifest', evidenceBundle: 'Evidence bundle', reviewerHandoff: 'Reviewer handoff', executionGate: 'Execution gate', executionAdapter: 'Execution adapter contract', gateAudit: 'Gate audit',
     ledgerIntegrity: 'Ledger integrity'
   },
   en: {
@@ -715,7 +719,7 @@ const labels = {
     ledger: 'Approval ledger', activeApprovals: 'Active approvals', expiredApprovals: 'Expired approvals',
     revokedApprovals: 'Revoked approvals', deniedApprovals: 'Denied approvals', conflictApprovals: 'Conflict approvals',
     scopeEvidence: 'Scope evidence', scopeReplay: 'Scope replay', executionReady: 'Execution ready',
-    evidenceManifest: 'Evidence manifest', evidenceBundle: 'Evidence bundle', executionGate: 'Execution gate', executionAdapter: 'Execution adapter contract', gateAudit: 'Gate audit',
+    evidenceManifest: 'Evidence manifest', evidenceBundle: 'Evidence bundle', reviewerHandoff: 'Reviewer handoff', executionGate: 'Execution gate', executionAdapter: 'Execution adapter contract', gateAudit: 'Gate audit',
     ledgerIntegrity: 'Ledger integrity'
   }
 };
@@ -838,6 +842,7 @@ function renderDetail(run) {
     <div><span class="status ${esc(run.effective_status)}">${esc(run.effective_status)}</span>${esc(run.run_id)}</div>
     ${renderProvider(run.provider || {})}
     ${renderEvidenceBundle(run.evidence_bundle || {})}
+    ${renderReviewerHandoff(run.reviewer_handoff || {})}
     ${renderApproval(run)}
     ${renderTree(run)}
     <div class="tabs">${Object.keys(sections).map(name => `
@@ -863,6 +868,16 @@ function renderEvidenceBundle(bundle) {
       ${providerCard('latest_bundle_id', latest.bundle_id || '')}
       ${providerCard('latest_bundle_hash', latest.bundle_hash || '')}
       ${providerCard('zip_path', bundle.zip_path || '')}
+    </div>`;
+}
+function renderReviewerHandoff(handoff) {
+  const latest = handoff.latest || {};
+  return `<div class="section-title">${t('reviewerHandoff')}</div>
+  <div class="provider-grid">
+      ${providerCard('handoff_count', handoff.handoff_count || 0)}
+      ${providerCard('latest_handoff_id', latest.handoff_id || '')}
+      ${providerCard('latest_handoff_hash', latest.handoff_hash || '')}
+      ${providerCard('manifest_path', handoff.manifest_path || '')}
     </div>`;
 }
 function providerCard(label, value) {

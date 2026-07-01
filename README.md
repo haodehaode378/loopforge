@@ -88,6 +88,8 @@ loopforge critique <run_id>
 loopforge critique changes --tests "79 tests OK" --risk "reserved no execution" --smoke "Chrome smoke OK"
 loopforge evidence bundle <run_id>
 loopforge evidence show <run_id>
+loopforge reviewer handoff <run_id>
+loopforge reviewer show <run_id>
 ```
 
 Run recorded tool calls:
@@ -139,13 +141,20 @@ Start the read-only local workbench:
 loopforge workbench
 ```
 
-The workbench opens a local web UI for projects, run history, status charts, blocked or failed reason distribution, event timeline, changed files, diff previews, risk decisions, evidence manifest hashes, integrity status, audit digest status, approval contract readiness, approval ledger timeline, scope replay status, execution gate readiness, execution adapter contract, evidence bundle exports, gate audit events, audit signature placeholders, disabled approval/resume skeleton, command output previews, event JSON detail, report section deep links, Git summary, automation summary, run critique, change-set critique, and multi-agent tree.
+The workbench opens a local web UI for projects, run history, status charts, blocked or failed reason distribution, event timeline, changed files, diff previews, risk decisions, evidence manifest hashes, integrity status, audit digest status, approval contract readiness, approval ledger timeline, scope replay status, execution gate readiness, execution adapter contract, evidence bundle exports, reviewer handoff packages, gate audit events, audit signature placeholders, disabled approval/resume skeleton, command output previews, event JSON detail, report section deep links, Git summary, automation summary, run critique, change-set critique, and multi-agent tree.
 
 Export a read-only evidence bundle for reviewer handoff:
 
 ```powershell
 loopforge evidence bundle <run_id>
 loopforge evidence show <run_id>
+```
+
+Generate a read-only reviewer handoff package:
+
+```powershell
+loopforge reviewer handoff <run_id>
+loopforge reviewer show <run_id>
 ```
 
 Inspect approval readiness and ledger entries without executing approval actions:

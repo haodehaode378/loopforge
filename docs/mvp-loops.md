@@ -735,3 +735,27 @@ If incomplete:
 
 - Keep Loop 26 change-set critique as the reliable baseline.
 - Do not use evidence bundles as approval, resume, or execution authority.
+
+## Loop 28: Reviewer Handoff
+
+Goal: turn evidence bundles into read-only reviewer-agent input packages.
+
+Must complete:
+
+- Add `reviewer_handoff.py`.
+- Add `loopforge reviewer handoff <run_id>` and `loopforge reviewer show <run_id>`.
+- Generate `reviewer_input.json`, `reviewer_prompt.md`, and `reviewer_manifest.json`.
+- Include run goal and status, evidence bundle path and hash, report summary, approval readiness, evidence manifest integrity, change-set critique, risk summary, and reviewer questions.
+- Show reviewer handoff status in reports and the Workbench.
+- Keep approve, resume, write, commit, push, and delete non-executable.
+
+Verification:
+
+- Unit tests cover handoff file generation and no-execution prompt text.
+- CLI tests cover handoff export and listing.
+- Workbench/report tests show handoff count and latest handoff hash.
+
+If incomplete:
+
+- Keep Loop 27 evidence bundle export as the reliable baseline.
+- Do not use reviewer handoff output as approval, resume, or execution authority.
