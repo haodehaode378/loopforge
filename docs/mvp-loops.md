@@ -785,3 +785,26 @@ If incomplete:
 
 - Keep Loop 28 reviewer handoff as the reliable baseline.
 - Do not treat reviewer decisions as approval ledger entries or execution gates.
+
+## Loop 30: Reviewer Status
+
+Goal: turn reviewer decision records into an advisory status that can guide the next loop without granting execution authority.
+
+Must complete:
+
+- Add reviewer status evaluation for no decision, approved, requested changes, blocked, and conflict states.
+- Add `loopforge reviewer status <run_id>`.
+- Show reviewer status in reports and the Workbench.
+- Include next-action guidance and explicit `execution_authority: false`.
+- Keep approve, resume, write, commit, push, and delete non-executable.
+
+Verification:
+
+- Unit tests cover reviewer status mapping.
+- CLI tests cover reviewer status output and no-execution text.
+- Workbench/report tests show reviewer status and next-loop readiness.
+
+If incomplete:
+
+- Keep Loop 29 reviewer decision records as the reliable baseline.
+- Do not use reviewer status as an approval ledger, execution gate, or automatic continuation trigger.

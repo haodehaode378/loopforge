@@ -4,6 +4,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from ai_agent_loop.reviewer_decision import (
+    evaluate_reviewer_status,
     read_reviewer_decisions,
     read_reviewer_decisions_summary,
     record_reviewer_decision,
@@ -67,6 +68,26 @@ class ReviewerDecisionTests(unittest.TestCase):
 
             self.assertIsNone(entry)
             self.assertIn("handoff-id", error)
+
+    def test_reviewer_status_maps_decisions_to_next_actions(self) -> None:
+        self.assertEqual(evaluate_reviewer_status([])["state"], "waiting-review")
+        self.assertFalse(evaluate_reviewer_status([])["execution_authority"])
+
+        approved = [{"decision": "approve", "status": "recorded"}]
+        self.assertEqual(evaluate_reviewer_status(approved)["state"], "review-passed")
+        self.assertTrue(evaluate_reviewer_status(approved)["ready_for_next_loop"])
+
+        changes = [{"decision": "request-changes", "status": "recorded"}]
+        self.assertEqual(evaluate_reviewer_status(changes)["state"], "changes-requested")
+        self.assertTrue(evaluate_reviewer_status(changes)["ready_for_next_loop"])
+
+        blocked = [{"decision": "block", "status": "recorded"}]
+        self.assertEqual(evaluate_reviewer_status(blocked)["state"], "blocked-by-review")
+        self.assertFalse(evaluate_reviewer_status(blocked)["ready_for_next_loop"])
+
+        conflict = [{"decision": "approve", "status": "conflict"}]
+        self.assertEqual(evaluate_reviewer_status(conflict)["state"], "conflict")
+        self.assertFalse(evaluate_reviewer_status(conflict)["ready_for_next_loop"])
 
 
 if __name__ == "__main__":

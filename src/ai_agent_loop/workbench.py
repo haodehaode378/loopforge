@@ -29,6 +29,7 @@ from ai_agent_loop.store import (
     render_git_summary,
     render_multi_agent_summary,
     replace_reviewer_decisions,
+    replace_reviewer_status,
     replace_reviewer_handoff,
     replace_approval_readiness,
     replace_change_set_critique,
@@ -39,7 +40,11 @@ from ai_agent_loop.store import (
     replace_sharp_review,
     replace_status_line,
 )
-from ai_agent_loop.reviewer_decision import read_reviewer_decisions_summary, render_reviewer_decisions_summary
+from ai_agent_loop.reviewer_decision import (
+    read_reviewer_decisions_summary,
+    render_reviewer_decisions_summary,
+    render_reviewer_status,
+)
 from ai_agent_loop.reviewer_handoff import read_reviewer_handoff_summary, render_reviewer_handoff_summary
 from ai_agent_loop.critique import changed_files_from_diff_name_output, render_change_set_critique, render_critique
 
@@ -119,6 +124,7 @@ def read_run(run_dir: Path) -> dict[str, object]:
     changed_files = collect_changed_files(events)
     risk_decisions = collect_risk_decisions(events)
     diff = read_diff_preview(run_dir, events)
+    reviewer_decisions = read_reviewer_decisions_summary(run_dir)
     return {
         "run_id": run_dir.name,
         "goal": goal_record.get("description", ""),
@@ -136,7 +142,8 @@ def read_run(run_dir: Path) -> dict[str, object]:
         "approval": build_approval_readiness(changed_files, risk_decisions, diff, events, ledger_entries, manifest),
         "evidence_bundle": read_evidence_bundle_summary(run_dir),
         "reviewer_handoff": read_reviewer_handoff_summary(run_dir),
-        "reviewer_decisions": read_reviewer_decisions_summary(run_dir),
+        "reviewer_decisions": reviewer_decisions,
+        "reviewer_status": reviewer_decisions.get("reviewer_status", {}),
         "approval_ledger": summarize_ledger(ledger_entries, scope_from_manifest_or_events(manifest, events)),
         "evidence_manifest": manifest,
         "parent_run_id": metadata.get("parent_run_id", ""),
@@ -377,6 +384,7 @@ def read_dynamic_report(
     report = replace_evidence_bundle(report, render_evidence_bundle_summary(path.parent))
     report = replace_reviewer_handoff(report, render_reviewer_handoff_summary(path.parent))
     report = replace_reviewer_decisions(report, render_reviewer_decisions_summary(path.parent))
+    report = replace_reviewer_status(report, render_reviewer_status(path.parent))
     report = replace_change_set_critique(report, render_change_set_critique_for_events(events))
     report = replace_sharp_review(report, render_critique(events))
     blocked_reason = find_blocked_reason(events)
@@ -707,7 +715,7 @@ const labels = {
     ledger: '审批账本', activeApprovals: '有效审批', expiredApprovals: '过期审批',
     revokedApprovals: '撤销审批', deniedApprovals: '拒绝审批', conflictApprovals: '冲突审批',
     scopeEvidence: 'Scope evidence', scopeReplay: 'Scope replay', executionReady: 'Execution ready',
-    evidenceManifest: 'Evidence manifest', evidenceBundle: 'Evidence bundle', reviewerHandoff: 'Reviewer handoff', reviewerDecisions: 'Reviewer decisions', executionGate: 'Execution gate', executionAdapter: 'Execution adapter contract', gateAudit: 'Gate audit',
+    evidenceManifest: 'Evidence manifest', evidenceBundle: 'Evidence bundle', reviewerHandoff: 'Reviewer handoff', reviewerDecisions: 'Reviewer decisions', reviewerStatus: 'Reviewer status', executionGate: 'Execution gate', executionAdapter: 'Execution adapter contract', gateAudit: 'Gate audit',
     ledgerIntegrity: 'Ledger integrity'
   },
   en: {
@@ -723,7 +731,7 @@ const labels = {
     ledger: 'Approval ledger', activeApprovals: 'Active approvals', expiredApprovals: 'Expired approvals',
     revokedApprovals: 'Revoked approvals', deniedApprovals: 'Denied approvals', conflictApprovals: 'Conflict approvals',
     scopeEvidence: 'Scope evidence', scopeReplay: 'Scope replay', executionReady: 'Execution ready',
-    evidenceManifest: 'Evidence manifest', evidenceBundle: 'Evidence bundle', reviewerHandoff: 'Reviewer handoff', reviewerDecisions: 'Reviewer decisions', executionGate: 'Execution gate', executionAdapter: 'Execution adapter contract', gateAudit: 'Gate audit',
+    evidenceManifest: 'Evidence manifest', evidenceBundle: 'Evidence bundle', reviewerHandoff: 'Reviewer handoff', reviewerDecisions: 'Reviewer decisions', reviewerStatus: 'Reviewer status', executionGate: 'Execution gate', executionAdapter: 'Execution adapter contract', gateAudit: 'Gate audit',
     ledgerIntegrity: 'Ledger integrity'
   }
 };
@@ -848,6 +856,7 @@ function renderDetail(run) {
     ${renderEvidenceBundle(run.evidence_bundle || {})}
     ${renderReviewerHandoff(run.reviewer_handoff || {})}
     ${renderReviewerDecisions(run.reviewer_decisions || {})}
+    ${renderReviewerStatus(run.reviewer_status || {})}
     ${renderApproval(run)}
     ${renderTree(run)}
     <div class="tabs">${Object.keys(sections).map(name => `
@@ -896,6 +905,16 @@ function renderReviewerDecisions(decisions) {
       ${providerCard('latest_reviewer_decision', latest.decision || '')}
       ${providerCard('latest_status', latest.status || '')}
       ${providerCard('decision_file', decisions.decision_file || '')}
+    </div>`;
+}
+function renderReviewerStatus(status) {
+  return `<div class="section-title">${t('reviewerStatus')}</div>
+  <div class="provider-grid">
+      ${providerCard('state', status.state || 'waiting-review')}
+      ${providerCard('ready_for_next_loop', status.ready_for_next_loop ? 'true' : 'false')}
+      ${providerCard('execution_authority', status.execution_authority ? 'true' : 'false')}
+      ${providerCard('mode', status.mode || 'advisory-only reviewer status')}
+      ${providerCard('next_action', status.next_action || '')}
     </div>`;
 }
 function providerCard(label, value) {
@@ -1152,6 +1171,7 @@ function tabName(name) {
     'Git Summary': 'Git',
     'Multi-Agent Summary': 'Multi-Agent',
     'Reviewer Decisions': 'Reviewer Decisions',
+    'Reviewer Status': 'Reviewer Status',
     'Sharp Review': 'Critique'
   };
   return map[name] || name;

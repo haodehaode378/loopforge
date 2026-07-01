@@ -33,6 +33,7 @@ from ai_agent_loop.multi_agent import MultiAgentRunner
 from ai_agent_loop.reviewer_decision import (
     read_reviewer_decisions_summary,
     record_reviewer_decision as append_reviewer_decision_record,
+    render_reviewer_status,
 )
 from ai_agent_loop.reviewer_handoff import export_reviewer_handoff, read_reviewer_handoff_summary
 from ai_agent_loop.store import RunStore, render_approval_readiness, render_change_set_critique_for_events
@@ -116,6 +117,8 @@ def build_parser() -> argparse.ArgumentParser:
     reviewer_decide_parser.add_argument("--reason", required=True)
     reviewer_decisions_parser = reviewer_subparsers.add_parser("decisions", help="Show reviewer decision records.")
     reviewer_decisions_parser.add_argument("run_id", help="Run ID to inspect for reviewer decisions.")
+    reviewer_status_parser = reviewer_subparsers.add_parser("status", help="Show advisory reviewer status.")
+    reviewer_status_parser.add_argument("run_id", help="Run ID to inspect for reviewer status.")
 
     approval_parser = subparsers.add_parser("approval", help="Show or record approval ledger decisions.")
     approval_subparsers = approval_parser.add_subparsers(dest="approval_command", required=True)
@@ -238,6 +241,8 @@ def main(argv: list[str] | None = None) -> None:
             record_reviewer_decision(args)
         elif args.reviewer_command == "decisions":
             show_reviewer_decisions(args.store, args.project, args.run_id)
+        elif args.reviewer_command == "status":
+            show_reviewer_status(args.store, args.project, args.run_id)
         else:
             show_reviewer_handoffs(args.store, args.project, args.run_id)
         return
@@ -577,6 +582,14 @@ def show_reviewer_decisions(store: str, project: str, run_id: str) -> None:
     print(f"run_id: {run_id}")
     print("reviewer_decisions:")
     print_json_lines(summary)
+
+
+def show_reviewer_status(store: str, project: str, run_id: str) -> None:
+    run_store = RunStore(store, project_path=project)
+    print(f"run_id: {run_id}")
+    print("reviewer_status:")
+    sys.stdout.write(render_reviewer_status(run_store.run_dir(run_id)) + "\n")
+    print("No approval, resume, write, commit, push, or delete action was executed.")
 
 
 def show_approval(store: str, project: str, run_id: str) -> None:

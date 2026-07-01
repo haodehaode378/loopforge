@@ -223,6 +223,7 @@ Current policy behavior:
 - Evidence bundle export packages run evidence into timestamped bundle directories and zip files for audit handoff, but does not grant approval or execute reserved actions.
 - Reviewer handoff packages convert run evidence into reviewer-agent inputs and prompts, but they are read-only review material and do not grant approval or execute reserved actions.
 - Reviewer decision records append reviewer judgments to `reviewer_decisions.jsonl`, but they are not approval ledger entries and do not grant approval, resume, write, commit, push, or delete authority.
+- Reviewer status turns reviewer decisions into an advisory next-action signal such as `changes-requested`, `blocked-by-review`, or `review-passed`, but it is not an approval or execution gate.
 
 High-risk examples:
 

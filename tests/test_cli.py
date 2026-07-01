@@ -156,6 +156,13 @@ class CliArgTests(unittest.TestCase):
         self.assertEqual(args.handoff_id, "handoff-1")
         self.assertEqual(args.decision, "request-changes")
 
+    def test_reviewer_status_command_parses_run_id(self) -> None:
+        args = build_parser().parse_args(normalize_argv(["reviewer", "status", "run-1"]))
+
+        self.assertEqual(args.command, "reviewer")
+        self.assertEqual(args.reviewer_command, "status")
+        self.assertEqual(args.run_id, "run-1")
+
     def test_critique_changes_reads_current_git_diff(self) -> None:
         with TemporaryDirectory() as temp_dir:
             project = Path(temp_dir) / "project"
@@ -437,6 +444,15 @@ class CliArgTests(unittest.TestCase):
             self.assertIn("reviewer_decisions:", show_stdout.getvalue())
             self.assertIn("request-changes", show_stdout.getvalue())
             self.assertIn("conflict", show_stdout.getvalue())
+
+            status_stdout = io.StringIO()
+            with redirect_stdout(status_stdout):
+                main(["--store", str(store_root), "--project", str(project), "reviewer", "status", result.run_id])
+
+            self.assertIn("reviewer_status:", status_stdout.getvalue())
+            self.assertIn("state: conflict", status_stdout.getvalue())
+            self.assertIn("execution_authority: False", status_stdout.getvalue())
+            self.assertIn("No approval, resume, write, commit, push, or delete action was executed.", status_stdout.getvalue())
 
     def test_approval_decide_rejects_duplicate_active_decision(self) -> None:
         with TemporaryDirectory() as temp_dir:

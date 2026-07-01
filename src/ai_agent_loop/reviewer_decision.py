@@ -126,6 +126,7 @@ def read_reviewer_decisions(run_dir: Path) -> list[dict[str, object]]:
 def read_reviewer_decisions_summary(run_dir: Path) -> dict[str, object]:
     entries = read_reviewer_decisions(run_dir)
     latest = entries[-1] if entries else {}
+    status = evaluate_reviewer_status(entries)
     return {
         "decision_file": str(reviewer_decisions_path(run_dir)),
         "entry_count": len(entries),
@@ -133,6 +134,7 @@ def read_reviewer_decisions_summary(run_dir: Path) -> dict[str, object]:
         "recorded_decisions": [entry for entry in entries if entry.get("status") == "recorded"],
         "conflict_decisions": [entry for entry in entries if entry.get("status") == "conflict"],
         "status_counts": status_counts(entries),
+        "reviewer_status": status,
         "no_execution_guarantee": NO_EXECUTION_GUARANTEE,
     }
 
@@ -158,6 +160,77 @@ def render_reviewer_decisions_summary(run_dir: Path) -> str:
             f"- latest_status: {latest.get('status', '')}",
             f"- decision_file: {summary.get('decision_file', '')}",
             f"- no_execution: {NO_EXECUTION_GUARANTEE}",
+        ]
+    )
+
+
+def evaluate_reviewer_status(entries: list[dict[str, object]]) -> dict[str, object]:
+    conflicts = [entry for entry in entries if entry.get("status") == "conflict"]
+    recorded = [entry for entry in entries if entry.get("status") == "recorded"]
+    if conflicts:
+        return reviewer_status(
+            "conflict",
+            "Resolve duplicate reviewer decisions before relying on the review signal.",
+            ready_for_next_loop=False,
+        )
+    if not recorded:
+        return reviewer_status(
+            "waiting-review",
+            "Record a reviewer decision for the latest reviewer handoff.",
+            ready_for_next_loop=False,
+        )
+
+    latest = recorded[-1]
+    decision = str(latest.get("decision") or "")
+    if decision == "approve":
+        return reviewer_status(
+            "review-passed",
+            "Proceed to the next planning loop with reviewer approval as evidence only.",
+            ready_for_next_loop=True,
+        )
+    if decision == "request-changes":
+        return reviewer_status(
+            "changes-requested",
+            "Plan a follow-up loop to address reviewer-requested changes.",
+            ready_for_next_loop=True,
+        )
+    if decision == "block":
+        return reviewer_status(
+            "blocked-by-review",
+            "Stop autonomous continuation until the reviewer block is resolved.",
+            ready_for_next_loop=False,
+        )
+    return reviewer_status(
+        "unknown-review",
+        "Review decision is unreadable; inspect reviewer_decisions.jsonl.",
+        ready_for_next_loop=False,
+    )
+
+
+def reviewer_status(state: str, next_action: str, ready_for_next_loop: bool) -> dict[str, object]:
+    return {
+        "state": state,
+        "next_action": next_action,
+        "ready_for_next_loop": ready_for_next_loop,
+        "execution_authority": False,
+        "mode": "advisory-only reviewer status",
+        "no_execution_guarantee": NO_EXECUTION_GUARANTEE,
+    }
+
+
+def render_reviewer_status(run_dir: Path) -> str:
+    summary = read_reviewer_decisions_summary(run_dir)
+    status = summary.get("reviewer_status", {})
+    if not isinstance(status, dict):
+        status = {}
+    return "\n".join(
+        [
+            f"- state: {status.get('state', 'waiting-review')}",
+            f"- ready_for_next_loop: {status.get('ready_for_next_loop', False)}",
+            f"- execution_authority: {status.get('execution_authority', False)}",
+            f"- mode: {status.get('mode', 'advisory-only reviewer status')}",
+            f"- next_action: {status.get('next_action', '')}",
+            f"- no_execution: {status.get('no_execution_guarantee', NO_EXECUTION_GUARANTEE)}",
         ]
     )
 

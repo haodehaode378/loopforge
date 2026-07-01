@@ -162,6 +162,7 @@ Record or inspect reviewer decisions without executing approval actions:
 ```powershell
 loopforge reviewer decide <run_id> --handoff-id <id> --decision approve|request-changes|block --actor <name> --reason <text>
 loopforge reviewer decisions <run_id>
+loopforge reviewer status <run_id>
 ```
 
 Inspect approval readiness and ledger entries without executing approval actions:
