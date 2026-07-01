@@ -20,6 +20,7 @@ from ai_agent_loop.ledger import read_approval_ledger, summarize_ledger
 from ai_agent_loop.loop import AgentStep, LoopResult
 from ai_agent_loop.project import Project, ProjectRegistry
 from ai_agent_loop.reviewer_handoff import render_reviewer_handoff_summary
+from ai_agent_loop.reviewer_decision import render_reviewer_decisions_summary
 
 
 class RunStore:
@@ -122,6 +123,7 @@ class RunStore:
         report = replace_approval_readiness(report, render_approval_readiness(events, ledger, manifest))
         report = replace_evidence_bundle(report, render_evidence_bundle_summary(self.run_dir(run_id)))
         report = replace_reviewer_handoff(report, render_reviewer_handoff_summary(self.run_dir(run_id)))
+        report = replace_reviewer_decisions(report, render_reviewer_decisions_summary(self.run_dir(run_id)))
         report = replace_change_set_critique(report, render_change_set_critique_for_events(events))
         report = replace_sharp_review(report, render_critique(events))
         blocked_reason = find_blocked_reason(events)
@@ -208,6 +210,7 @@ def render_report(result: LoopResult) -> str:
         f"## Approval Readiness\n\n{render_approval_readiness([step.to_dict() for step in result.steps])}\n\n"
         f"## Evidence Bundle\n\n{render_evidence_bundle_summary(Path(result.run_id))}\n\n"
         f"## Reviewer Handoff\n\n{render_reviewer_handoff_summary(Path(result.run_id))}\n\n"
+        f"## Reviewer Decisions\n\n{render_reviewer_decisions_summary(Path(result.run_id))}\n\n"
         f"## Change-set Critique\n\n{change_critique}\n\n"
         f"## Sharp Review\n\n{critique}\n\n"
         f"## Loop Trace\n\n{steps}\n"
@@ -793,6 +796,9 @@ def replace_status_line(report: str, status: str) -> str:
 def ensure_summary_headings(report: str) -> str:
     if "## Sharp Review" not in report:
         return report
+    if "## Reviewer Decisions" not in report and "## Change-set Critique" in report:
+        before, after = report.split("## Change-set Critique", 1)
+        report = f"{before}## Reviewer Decisions\n\n- none\n\n## Change-set Critique{after}"
     additions = []
     if "## Automation Summary" not in report:
         additions.append("## Automation Summary\n\nNo autonomous actions recorded.\n")
@@ -806,6 +812,8 @@ def ensure_summary_headings(report: str) -> str:
         additions.append("## Evidence Bundle\n\n- none\n")
     if "## Reviewer Handoff" not in report:
         additions.append("## Reviewer Handoff\n\n- none\n")
+    if "## Reviewer Decisions" not in report:
+        additions.append("## Reviewer Decisions\n\n- none\n")
     if "## Change-set Critique" not in report:
         additions.append("## Change-set Critique\n\n" + render_change_set_critique_for_events([]) + "\n")
     if not additions:
@@ -847,6 +855,16 @@ def replace_evidence_bundle(report: str, summary: str) -> str:
 
 def replace_reviewer_handoff(report: str, summary: str) -> str:
     heading = "## Reviewer Handoff"
+    next_heading = "\n## Reviewer Decisions"
+    if heading not in report or next_heading not in report:
+        return report
+    before, rest = report.split(heading, 1)
+    _, after = rest.split(next_heading, 1)
+    return f"{before}{heading}\n\n{summary}\n\n{next_heading}{after}"
+
+
+def replace_reviewer_decisions(report: str, summary: str) -> str:
+    heading = "## Reviewer Decisions"
     next_heading = "\n## Change-set Critique"
     if heading not in report or next_heading not in report:
         return report

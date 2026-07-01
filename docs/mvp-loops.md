@@ -759,3 +759,29 @@ If incomplete:
 
 - Keep Loop 27 evidence bundle export as the reliable baseline.
 - Do not use reviewer handoff output as approval, resume, or execution authority.
+
+## Loop 29: Reviewer Decision Import
+
+Goal: let reviewer output become auditable run evidence without turning it into approval or execution authority.
+
+Must complete:
+
+- Add `reviewer_decision.py`.
+- Add `loopforge reviewer decide <run_id> --handoff-id <id> --decision approve|request-changes|block --actor <name> --reason <text>`.
+- Add `loopforge reviewer decisions <run_id>`.
+- Validate that the handoff id exists in the current run's reviewer handoff set.
+- Append reviewer decisions to `reviewer_decisions.jsonl` only.
+- Mark duplicate decisions for the same handoff as `conflict` instead of overwriting old records.
+- Show reviewer decisions in reports and the Workbench.
+- Keep approve, resume, write, commit, push, and delete non-executable.
+
+Verification:
+
+- Unit tests cover valid records, missing handoff rejection, and duplicate conflict records.
+- CLI tests cover reviewer decision record/show flows and no-execution output.
+- Workbench/report tests show reviewer decision counts, latest decision, and the new report section.
+
+If incomplete:
+
+- Keep Loop 28 reviewer handoff as the reliable baseline.
+- Do not treat reviewer decisions as approval ledger entries or execution gates.

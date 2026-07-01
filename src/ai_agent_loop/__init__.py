@@ -11,6 +11,7 @@ from ai_agent_loop.approval import (
 from ai_agent_loop.autonomous import AutonomousRunner
 from ai_agent_loop.critique import build_change_set_critique, build_critique, render_change_set_critique, render_critique
 from ai_agent_loop.evidence_bundle import export_evidence_bundle
+from ai_agent_loop.reviewer_decision import record_reviewer_decision, read_reviewer_decisions_summary
 from ai_agent_loop.reviewer_handoff import export_reviewer_handoff
 from ai_agent_loop.goal import Goal
 from ai_agent_loop.ledger import read_approval_ledger, summarize_ledger
@@ -46,6 +47,8 @@ __all__ = [
     "ProjectRegistry",
     "ProviderSettings",
     "read_approval_ledger",
+    "read_reviewer_decisions_summary",
+    "record_reviewer_decision",
     "RiskAssessment",
     "RunStore",
     "render_report",

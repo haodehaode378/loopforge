@@ -30,6 +30,10 @@ from ai_agent_loop.ledger import (
     validate_decision_record,
 )
 from ai_agent_loop.multi_agent import MultiAgentRunner
+from ai_agent_loop.reviewer_decision import (
+    read_reviewer_decisions_summary,
+    record_reviewer_decision as append_reviewer_decision_record,
+)
 from ai_agent_loop.reviewer_handoff import export_reviewer_handoff, read_reviewer_handoff_summary
 from ai_agent_loop.store import RunStore, render_approval_readiness, render_change_set_critique_for_events
 from ai_agent_loop.tools import FileTools, GitTools, ShellTools
@@ -104,6 +108,14 @@ def build_parser() -> argparse.ArgumentParser:
     reviewer_handoff_parser.add_argument("run_id", help="Run ID to package for reviewer handoff.")
     reviewer_show_parser = reviewer_subparsers.add_parser("show", help="Show reviewer handoff files.")
     reviewer_show_parser.add_argument("run_id", help="Run ID to inspect for reviewer handoffs.")
+    reviewer_decide_parser = reviewer_subparsers.add_parser("decide", help="Record a reviewer decision only.")
+    reviewer_decide_parser.add_argument("run_id", help="Run ID to record a reviewer decision for.")
+    reviewer_decide_parser.add_argument("--handoff-id", required=True)
+    reviewer_decide_parser.add_argument("--decision", choices=["approve", "request-changes", "block"], required=True)
+    reviewer_decide_parser.add_argument("--actor", required=True)
+    reviewer_decide_parser.add_argument("--reason", required=True)
+    reviewer_decisions_parser = reviewer_subparsers.add_parser("decisions", help="Show reviewer decision records.")
+    reviewer_decisions_parser.add_argument("run_id", help="Run ID to inspect for reviewer decisions.")
 
     approval_parser = subparsers.add_parser("approval", help="Show or record approval ledger decisions.")
     approval_subparsers = approval_parser.add_subparsers(dest="approval_command", required=True)
@@ -222,6 +234,10 @@ def main(argv: list[str] | None = None) -> None:
     if args.command == "reviewer":
         if args.reviewer_command == "handoff":
             export_run_reviewer_handoff(args.store, args.project, args.run_id)
+        elif args.reviewer_command == "decide":
+            record_reviewer_decision(args)
+        elif args.reviewer_command == "decisions":
+            show_reviewer_decisions(args.store, args.project, args.run_id)
         else:
             show_reviewer_handoffs(args.store, args.project, args.run_id)
         return
@@ -525,6 +541,42 @@ def show_reviewer_handoffs(store: str, project: str, run_id: str) -> None:
             sort_keys=True,
         )
     )
+
+
+def record_reviewer_decision(args: argparse.Namespace) -> None:
+    run_store = RunStore(args.store, project_path=args.project)
+    entry, error = append_reviewer_decision_record(
+        run_store.run_dir(args.run_id),
+        args.run_id,
+        handoff_id=args.handoff_id,
+        decision=args.decision,
+        actor=args.actor,
+        reason=args.reason,
+    )
+    if error:
+        print("reviewer_decision_recorded: false")
+        print(error)
+        return
+    if entry is None:
+        print("reviewer_decision_recorded: false")
+        return
+    recorded = entry.get("status") != "conflict"
+    print(f"reviewer_decision_recorded: {str(recorded).lower()}")
+    if entry.get("status") == "conflict":
+        print("reviewer_decision_conflict: true")
+    print(f"decision_id: {entry['decision_id']}")
+    print(f"handoff_id: {entry['handoff_id']}")
+    print(f"decision: {entry['decision']}")
+    print(f"status: {entry['status']}")
+    print("No approval, resume, write, commit, push, or delete action was executed.")
+
+
+def show_reviewer_decisions(store: str, project: str, run_id: str) -> None:
+    run_store = RunStore(store, project_path=project)
+    summary = read_reviewer_decisions_summary(run_store.run_dir(run_id))
+    print(f"run_id: {run_id}")
+    print("reviewer_decisions:")
+    print_json_lines(summary)
 
 
 def show_approval(store: str, project: str, run_id: str) -> None:

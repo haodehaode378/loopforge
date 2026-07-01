@@ -9,6 +9,8 @@ from ai_agent_loop import Agent, RunStore
 from ai_agent_loop.approval import evaluate_approval_contract
 from ai_agent_loop.cli import build_parser, main, normalize_argv
 from ai_agent_loop.ledger import approval_requests_with_ids, approval_scope, read_approval_ledger
+from ai_agent_loop.reviewer_decision import read_reviewer_decisions
+from ai_agent_loop.reviewer_handoff import read_reviewer_handoff_summary
 from ai_agent_loop.tools import ShellTools
 
 
@@ -129,6 +131,30 @@ class CliArgTests(unittest.TestCase):
         self.assertEqual(args.command, "reviewer")
         self.assertEqual(args.reviewer_command, "handoff")
         self.assertEqual(args.run_id, "run-1")
+
+    def test_reviewer_decide_command_parses_decision(self) -> None:
+        args = build_parser().parse_args(
+            normalize_argv(
+                [
+                    "reviewer",
+                    "decide",
+                    "run-1",
+                    "--handoff-id",
+                    "handoff-1",
+                    "--decision",
+                    "request-changes",
+                    "--actor",
+                    "tester",
+                    "--reason",
+                    "Need more tests.",
+                ]
+            )
+        )
+
+        self.assertEqual(args.command, "reviewer")
+        self.assertEqual(args.reviewer_command, "decide")
+        self.assertEqual(args.handoff_id, "handoff-1")
+        self.assertEqual(args.decision, "request-changes")
 
     def test_critique_changes_reads_current_git_diff(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -334,6 +360,83 @@ class CliArgTests(unittest.TestCase):
 
             self.assertIn("reviewer_handoffs:", show_stdout.getvalue())
             self.assertIn("handoff_hash", show_stdout.getvalue())
+
+    def test_reviewer_decision_records_without_execution(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = root / "project"
+            project.mkdir()
+            store_root = root / ".agent"
+            result = Agent(store_root=store_root, project_path=project).run("Reviewer decision")
+            run_store = RunStore(store_root, project_path=project)
+            ShellTools(run_store, result.run_id).run("echo reviewer-decision")
+            with redirect_stdout(io.StringIO()):
+                main(["--store", str(store_root), "--project", str(project), "evidence", "bundle", result.run_id])
+                main(["--store", str(store_root), "--project", str(project), "reviewer", "handoff", result.run_id])
+            handoff = read_reviewer_handoff_summary(run_store.run_dir(result.run_id))
+            handoff_id = handoff["latest"]["handoff_id"]
+
+            stdout = io.StringIO()
+            with redirect_stdout(stdout):
+                main(
+                    [
+                        "--store",
+                        str(store_root),
+                        "--project",
+                        str(project),
+                        "reviewer",
+                        "decide",
+                        result.run_id,
+                        "--handoff-id",
+                        str(handoff_id),
+                        "--decision",
+                        "request-changes",
+                        "--actor",
+                        "tester",
+                        "--reason",
+                        "Need clearer verification.",
+                    ]
+                )
+
+            output = stdout.getvalue()
+            entries = read_reviewer_decisions(run_store.run_dir(result.run_id))
+            self.assertIn("reviewer_decision_recorded: true", output)
+            self.assertIn("No approval, resume, write, commit, push, or delete action was executed.", output)
+            self.assertEqual(entries[0]["decision"], "request-changes")
+            self.assertEqual(entries[0]["status"], "recorded")
+            self.assertIn("Reviewer Decisions", run_store.read_report(result.run_id))
+
+            duplicate = io.StringIO()
+            with redirect_stdout(duplicate):
+                main(
+                    [
+                        "--store",
+                        str(store_root),
+                        "--project",
+                        str(project),
+                        "reviewer",
+                        "decide",
+                        result.run_id,
+                        "--handoff-id",
+                        str(handoff_id),
+                        "--decision",
+                        "approve",
+                        "--actor",
+                        "tester",
+                        "--reason",
+                        "Second decision.",
+                    ]
+                )
+            self.assertIn("reviewer_decision_recorded: false", duplicate.getvalue())
+            self.assertIn("reviewer_decision_conflict: true", duplicate.getvalue())
+
+            show_stdout = io.StringIO()
+            with redirect_stdout(show_stdout):
+                main(["--store", str(store_root), "--project", str(project), "reviewer", "decisions", result.run_id])
+
+            self.assertIn("reviewer_decisions:", show_stdout.getvalue())
+            self.assertIn("request-changes", show_stdout.getvalue())
+            self.assertIn("conflict", show_stdout.getvalue())
 
     def test_approval_decide_rejects_duplicate_active_decision(self) -> None:
         with TemporaryDirectory() as temp_dir:

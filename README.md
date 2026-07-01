@@ -141,7 +141,7 @@ Start the read-only local workbench:
 loopforge workbench
 ```
 
-The workbench opens a local web UI for projects, run history, status charts, blocked or failed reason distribution, event timeline, changed files, diff previews, risk decisions, evidence manifest hashes, integrity status, audit digest status, approval contract readiness, approval ledger timeline, scope replay status, execution gate readiness, execution adapter contract, evidence bundle exports, reviewer handoff packages, gate audit events, audit signature placeholders, disabled approval/resume skeleton, command output previews, event JSON detail, report section deep links, Git summary, automation summary, run critique, change-set critique, and multi-agent tree.
+The workbench opens a local web UI for projects, run history, status charts, blocked or failed reason distribution, event timeline, changed files, diff previews, risk decisions, evidence manifest hashes, integrity status, audit digest status, approval contract readiness, approval ledger timeline, scope replay status, execution gate readiness, execution adapter contract, evidence bundle exports, reviewer handoff packages, reviewer decision records, gate audit events, audit signature placeholders, disabled approval/resume skeleton, command output previews, event JSON detail, report section deep links, Git summary, automation summary, run critique, change-set critique, and multi-agent tree.
 
 Export a read-only evidence bundle for reviewer handoff:
 
@@ -155,6 +155,13 @@ Generate a read-only reviewer handoff package:
 ```powershell
 loopforge reviewer handoff <run_id>
 loopforge reviewer show <run_id>
+```
+
+Record or inspect reviewer decisions without executing approval actions:
+
+```powershell
+loopforge reviewer decide <run_id> --handoff-id <id> --decision approve|request-changes|block --actor <name> --reason <text>
+loopforge reviewer decisions <run_id>
 ```
 
 Inspect approval readiness and ledger entries without executing approval actions:
